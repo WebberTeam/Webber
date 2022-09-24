@@ -1,0 +1,17 @@
+image: python:3.8-buster
+
+before_script:
+  - pip install pdoc
+  - pip install -e .
+
+pages:
+  stage: deploy
+  tags: [pages]
+  script:
+    - pdoc ./webber -o ./public
+  artifacts:
+    paths:
+      - public
+  only:
+    - main              # Be sure to change if main branch is renamed to "master"
+    - pre-0.0.1         # This should be removed once initial alpha is achieved.
