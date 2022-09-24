@@ -10,5 +10,5 @@ setup(
     author='WebberTeam',
     author_email='admin@webberproject.com',
     url='https://www.webberproject.com',
-    classifiers=['Development Status :: 1 - Planning'],
+    classifiers=['Development Status :: 2 - Pre-Alpha'],
 )
