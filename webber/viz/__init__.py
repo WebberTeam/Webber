@@ -5,7 +5,6 @@ Last updated by: June 1, 2021 (pre-0.0.1)
 """
 from json import dumps as _dumps
 from sys import platform as _platform
-from webbrowser import open_new as _open_new
 from os.path import dirname as _dirname, abspath as _abspath, join as _join
 from flask import Flask as _Flask
 from networkx import DiGraph as _DiGraph
@@ -185,7 +184,6 @@ def visualize_browser(graph: _DiGraph):
 
     print('Serving visualization...\n')
 
-    _open_new("http://127.0.0.1:5000/")
     server.run(host="127.0.0.1", port=5000)
 
     print('\nVisualization closed.')
