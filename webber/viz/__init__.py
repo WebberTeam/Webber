@@ -10,6 +10,7 @@ from os.path import dirname as _dirname, abspath as _abspath, join as _join
 from flask import Flask as _Flask
 from networkx import DiGraph as _DiGraph
 from pyvis.network import Network as _Network
+from webber.xcoms import Promise as _Promise
 # from PyQt6.QtWidgets import QApplication as _QApplication              # pylint: disable=no-name-in-module
 # from PyQt6.QtWebEngineCore import QWebEnginePage as _QWebEnginePage    # pylint: disable=no-name-in-module
 # from PyQt6.QtWebEngineWidgets import QWebEngineView as _QWebEngineView # pylint: disable=no-name-in-module
@@ -26,13 +27,55 @@ def generate_pyvis_network(graph: _DiGraph) -> _Network:
         err_msg = "Visualizations cannot be generated for DAGs without nodes."
         raise RuntimeError(err_msg)
 
-    network = _Network(directed=True)
+    network = _Network(
+        directed=True,
+        layout='hierarchical',
+    )
 
-    for node in graph.nodes:
-        network.add_node(node)
+    for n in graph.nodes:
+        node = graph.nodes[n]
+        args, kwargs = [], {}
+        for a in node['args']:
+            try:
+                args.append(_dumps(a))
+            except:
+                if isinstance(a, _Promise):
+                    args.append(f'Promise({a.key})')
+                else:
+                    args.append(f'Object({str(a.__class__)})')
+        for k,v in node['kwargs'].items():
+            try:
+                _dumps(k)
+                try:
+                    kwargs[_dumps(k)] = _dumps(v)
+                except:
+                    if isinstance(v, _Promise):
+                        kwargs[k] = f"Promise('{v.key.split('__')[0]}')"
+                    else:
+                        kwargs[k] = f'Object({str(v.__class__)})'
+            except:
+                pass
+        
+        node_title  = f"{node['name']}:"
+
+        try:
+            node_title += f" {node['callable'].__doc__}"
+        except:
+            pass
+
+        node_title += f"<br>uuid:    {n.split('__')[-1]}"
+        node_title += f"<br>posargs: {', '.join(args)}" if args else ""
+        node_title += f"<br>kwargs:  {_dumps(kwargs)}" if kwargs else ""
+
+        network.add_node(
+            n,
+            label=node['name'],
+            shape='circle' if len(graph) < 4 else 'box',
+            title= node_title,
+            labelHighlightBold=True
+        )
     for source_edge, dest_edge in graph.edges:
         network.add_edge(source_edge, dest_edge)
-
     return network
 
 
@@ -52,7 +95,50 @@ def generate_vis_js_script(graph: _DiGraph) -> str:
     script_js += "var edges = new vis.DataSet(" + _dumps(network_data['edges']) + """);\n"""
     script_js += """var container = document.getElementById("mynetwork");\n"""
     script_js += """var data = { nodes: nodes, edges: edges, };\n"""
-    script_js += """var options = """ + network_data['options'] + """;\n"""
+    script_js += """var options = {
+                    "autoResize": true,
+                    "configure": {
+                        "enabled": false
+                    },
+                    "edges": {
+                        "color": {
+                            "inherit": true
+                        },
+                        "smooth": {
+                            "enabled": false,
+                        },
+                        "arrows": {
+                            "to": true,
+                            "from": true
+                        }
+                    },
+                    "interaction": {
+                        "dragNodes": true,
+                        "hideEdgesOnDrag": false,
+                        "hideNodesOnDrag": false
+                    },
+                    "layout": {
+                        "hierarchical": {
+                            "direction": "UD",                            "blockShifting": true,
+                            "edgeMinimization": false,
+                            "enabled": true,
+                            "parentCentralization": true,
+                            "sortMethod": "hubsize",
+                        },
+                        "improvedLayout": true,
+                        "randomSeed": 0,
+                    },
+                    "physics": {
+                        "enabled": true,
+                        "stabilization": {
+                            "enabled": true,
+                            "fit": true,
+                            "iterations": 1000,
+                            "onlyDynamicEdges": false,
+                            "updateInterval": 50
+                        }
+                    }
+                };\n"""
     script_js += """var network = new vis.Network(container, data, options);\n"""
 
     return script_js

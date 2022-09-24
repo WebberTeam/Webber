@@ -1,11 +1,12 @@
 """
 Base module for abstract multiprocessing system - a directed acyclic graph.
 """
+from copy import deepcopy
 import logging as _logging
 import contextlib as _contextlib
 from uuid import uuid1 as _uuid1
-from multiprocessing import Process as _Process
-from tempfile import NamedTemporaryFile as _NamedTemporaryFile
+from traceback import print_exc as _print_exc
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable as _Callable, Literal as _Literal, Tuple as _Tuple, Union as _Union
 from sys import stdout as _stdout
 from networkx import (
@@ -14,8 +15,8 @@ from networkx import (
     is_directed_acyclic_graph as _is_directed_acyclic_graph,
     relabel_nodes as _relabel_nodes
 )
-from webber.xcoms import Promise as _Promise, Context as _Context
-from webber.viz import visualize_browser as _visualize_browser #, visualize_gui as _visualize_gui
+from webber.xcoms import Promise as _Promise, InvalidCallable as _InvalidCallable
+from webber.viz import visualize_browser as _visualize_browser
 
 class _OutputLogger:
     """
@@ -41,7 +42,6 @@ class _OutputLogger:
             self._redirector = _contextlib.redirect_stdout(self)
         # elif file is _stderr:
         #     self._redirector = _contextlib.redirect_stderr(self)
-        #     print('here', name)
 
     def write(self, msg: str):
         """Writes non-empty strings to the logger's output -- stdout, by default."""
@@ -61,6 +61,10 @@ class _OutputLogger:
         """Allows Python built-ins to exit scope on error. (?)"""
         self._redirector.__exit__(exc_type, exc_value, traceback)
 
+def _event_wrapper(_callable: callable, _name: str, _args, _kwargs):
+    with _OutputLogger(str(_uuid1()), "INFO", _name) as _:
+        return _callable(*_args, **_kwargs)
+
 class DAG:
     """
     Directed Acyclic Graph used to represent Pythonic tasks in parallel.
@@ -70,77 +74,72 @@ class DAG:
         Base class used to execute DAG in embarrassingly parallel.
         """
         def __init__(self, graph: _DiGraph, roots: list) -> None:
-            # Create context and instantiate common data-source for x-coms.
-            datastore_name = None
-            with _NamedTemporaryFile(delete=False) as datastore:
-                datastore.write(b'')
-                datastore.close()
-                datastore_name = datastore.name
-            context = _Context(datastore_name)
+            with _OutputLogger(str(_uuid1()), "INFO", "root") as _:
+                # Initialize local variables for execution.
+                complete, started, failed, skipped = set(), set(), set(), set()
+                events = set(roots)
+                refs = {}
+                # Start execution of root node functions.
+                with ThreadPoolExecutor() as executor:
+                    for event in events:
+                        refs[event] = executor.submit(
+                            _event_wrapper,
+                            _callable=graph.nodes[event]['callable'],
+                            _name=graph.nodes[event]['name'],
+                            _args=graph.nodes[event]['args'],
+                            _kwargs=graph.nodes[event]['kwargs']
+                        )
+                        started.add(event)
+                    # Loop until all nodes in the network are executed.
+                    while (len(complete) + len(failed) + len(skipped)) != len(graph):
+                        for event in events:
+                            if refs[event].done() is True:
+                                if refs[event].exception(timeout=0) is not None:
+                                    try:
+                                        raise refs[event].exception(timeout=0)
+                                    except:                                                                             # pylint: disable=bare-except
+                                        _print_exc()
+                                        print(f"Event {event} exited with exception, skipping dependent events...")     # pylint: disable=line-too-long
+                                        failed.add(event)
+                                        skipped = skipped.union(_descendants(graph, event))
+                                        started = started.union(skipped)
+                                        events  = started.difference(complete.union(failed).union(skipped))             # pylint: disable=line-too-long
+                                        continue
+                                complete.add(event)
+                                successors = [
+                                    successor for successor in list(graph.successors(event)) if
+                                    complete.issuperset(set(graph.predecessors(successor)))
+                                ]
+                                for successor in successors:
+                                    _args = [
+                                        a if not isinstance(a, _Promise) else refs[a.key].result()
+                                        for a in graph.nodes[successor]['args']
+                                    ]
+                                    _kwargs = {
+                                        k: v if not isinstance(v, _Promise) else refs[v.key].result()
+                                        for k, v in graph.nodes[successor]['kwargs'].items()
+                                    }
+                                    refs[successor] = executor.submit(
+                                        _event_wrapper,
+                                        _callable=graph.nodes[successor]['callable'],
+                                        _name=graph.nodes[successor]['name'],
+                                        _args=_args,
+                                        _kwargs=_kwargs
+                                    )
+                                    started.add(successor)
+                        # Initialized nodes that are incomplete or not yet documented as complete.
+                        events = started.difference(complete.union(failed).union(skipped))
 
-            # Initialize local variables for execution.
-            complete, started, failed, skipped = set(), set(), set(), set()
-            events = set(roots)
-            refs = {}
-            # Start execution of root node functions.
-            for event in events:
-                graph.nodes[event]['args'] = [
-                    arg if not isinstance(arg, _Promise) else context.collect(arg)
-                    for arg in graph.nodes[event]['args']
-                ]
-                graph.nodes[event]['kwargs'] = {
-                    key: val if not isinstance(val, _Promise) else context.collect(val)
-                    for key, val in graph.nodes[event]['kwargs'].items()
-                }
-                refs[event] = _Process(
-                    target=graph.nodes[event]['callable'],
-                    args=graph.nodes[event]['args'],
-                    kwargs=graph.nodes[event]['kwargs'],
-                )
-                with _OutputLogger(str(_uuid1()), "INFO", graph.nodes[event]['name']) as _:
-                    refs[event].start()
-                started.add(event)
-            # Loop until all nodes in the network are executed.
-            while (len(complete) + len(failed) + len(skipped)) != len(graph):
-                for event in events:
-                    if refs[event].exitcode is not None:
-                        if refs[event].exitcode != 0:
-                            err_msg = f"Dependency {event} " \
-                                    + f"exited with error code {refs[event].exitcode}, " \
-                                    + "skipping dependent events..."
-                            print(err_msg)
-                            failed.add(event)
-                            skipped  = skipped.union(_descendants(graph, event))
-                            started  = started.union(skipped)
-                            events   = started.difference(complete.union(failed).union(skipped))
-                            continue
-                        complete.add(event)
-                        successors = [
-                            successor for successor in list(graph.successors(event)) if
-                            complete.issuperset(set(graph.predecessors(successor)))
-                        ]
-                        for successor in successors:
-                            graph.nodes[successor]['args'] = [
-                                arg if not isinstance(arg, _Promise) else context.collect(arg)
-                                for arg in graph.nodes[successor]['args']
-                            ]
-                            graph.nodes[successor]['kwargs'] = {
-                                key: val if not isinstance(val, _Promise) else context.collect(val)
-                                for key, val in graph.nodes[successor]['kwargs'].items()
-                            }
-                            refs[successor] = _Process(
-                                target=graph.nodes[successor]['callable'],
-                                  args=graph.nodes[successor]['args'],
-                                kwargs=graph.nodes[successor]['kwargs'],
-                            )
-                            with _OutputLogger(str(_uuid1()), "INFO", graph.nodes[successor]['name']) as _:     #pylint: disable=line-too-long
-                                refs[successor].start()
-                            started.add(successor)
-                # Initialized nodes that are either incomplete or not yet documented as complete.
-                events = started.difference(complete.union(failed).union(skipped))
-            # Assurance that all events that were initiated have been completed.
-            for event in complete.union(failed):
-                refs[event].join()
+    def validate_promise(self, promise: _Promise) -> bool:
+        """
+        Returns True if a given Promise is valid, based on the DAG's current scope.
+
+        Raises `webber.xcom.InvalidCallable` if Promise requests a callable that is out of scope.
+        """
+        if promise.key not in self.graph.nodes:
+            err_msg = f"Requested callable {promise.key} is not defined in DAG's scope."
+            raise _InvalidCallable(err_msg)
+        return True
 
     def add_node(self, node, *args, **kwargs) -> str:
         """
@@ -153,6 +152,14 @@ class DAG:
             raise TypeError(err_msg)
 
         node_name = f"{node.__name__}__{_uuid1()}"
+
+        for arg in args:
+            if isinstance(arg, _Promise):
+                self.validate_promise(arg)
+
+        for val in kwargs.values():
+            if isinstance(val, _Promise):
+                self.validate_promise(val)
 
         self.graph.add_node(
             node_for_adding=node_name,

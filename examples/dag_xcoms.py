@@ -1,27 +1,32 @@
 """
-Demonstrates Webber's capacity for communication between dependent functions,
-based on a temporary SQLite data store.
+Demonstrates Webber's capacity for communication between dependent functions.
 """
 from time import time
 import webber
 from webber.xcoms import Promise
 
-def foo_1(context: Promise):                              # pylint: disable=missing-function-docstring
-    context['my-arg'] = "Hi Mom!"
-    print(f"From foo_1, my arg is: {context['my-arg']}")
-    context.upload()
+def introduction(name):                         # pylint: disable=missing-function-docstring
+    print(f"My name is...{name}.")
+    return name
 
-def foo_2(context: Promise):                              # pylint: disable=missing-function-docstring
-    print(f"From foo_2, My arg was: {context['my-arg']}")
+def greeting(name):                             # pylint: disable=missing-function-docstring
+    print(f"Hello, {name}!")
 
 if __name__ == "__main__":
+
+    print()
+
     dag = webber.DAG()
-    f1 = dag.add_node(foo_1, context=Promise())
-    f2 = dag.add_node(foo_2, context=Promise('my-arg'))
-    dag.add_edge(f1, f2) # dag.add_edge(foo_1, foo_2) is equivalent in this scope
+    intro = dag.add_node(introduction, "World")
+    hello = dag.add_node(greeting, name=Promise(intro))
+    dag.add_edge(intro, hello)
 
     webber_s = time()
+
     dag.execute()
+
     webber_time = time() - webber_s
 
-    print("Webber Runtime:", webber_time)
+    print("\nWebber Runtime:", webber_time, end="\n\n")
+
+    dag.visualize()
