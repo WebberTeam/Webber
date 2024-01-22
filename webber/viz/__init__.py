@@ -9,6 +9,8 @@ import os.path as _path
 import flask as _flask
 import networkx as _nx
 import webber.xcoms as _xcoms
+import webber.edges as _edges
+import matplotlib.pyplot as _plt
 from pyvis.network import Network as _Network
 # from PyQt6.QtWidgets import QApplication as _QApplication              # pylint: disable=no-name-in-module
 # from PyQt6.QtWebEngineCore import QWebEnginePage as _QWebEnginePage    # pylint: disable=no-name-in-module
@@ -16,7 +18,19 @@ from pyvis.network import Network as _Network
 
 from jinja2 import Environment as _Environment, FileSystemLoader as _FileSystemLoader
 
-__all__ = ["generate_pyvis_network", "visualize_browser"]
+__all__ = ["generate_pyvis_network", "visualize_plt", "visualize_browser"]
+
+def visualize_plt(graph: _nx.DiGraph) -> list[str]:
+    for layer, nodes in enumerate(_nx.topological_generations(graph)):
+        for node in nodes:
+            graph.nodes[node]["layer"] = layer
+    graph = _nx.relabel_nodes(graph, lambda node: graph.nodes[node]["name"])
+    pos = _nx.multipartite_layout(graph, subset_key="layer")
+    fig, ax = _plt.subplots()
+    _nx.draw_networkx(graph, pos=pos, ax=ax)
+    ax.set_title("DAG layout in topological order")
+    fig.tight_layout()
+    _plt.show()
 
 def generate_pyvis_network(graph: _nx.DiGraph) -> _Network:
     """
