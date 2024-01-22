@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 setup(
     name='webber',
-    version='0.0.1.post3',
+    version='0.0.2',
     description='An Pythonic platform for no-latency ETL and parallelization inspired by Apache Airflow.',
     long_description='An Pythonic platform for no-latency ETL and parallelization inspired by Apache Airflow.',
     long_description_content_type='text/x-rst',

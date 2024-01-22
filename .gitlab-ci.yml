@@ -14,4 +14,3 @@ pages:
       - public
   only:
     - main              # Be sure to change if main branch is renamed to "master"
-    - pre-0.0.1         # This should be removed once initial alpha is achieved.
