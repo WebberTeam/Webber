@@ -9,6 +9,7 @@ from traceback import print_exc
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Literal, Tuple, Union
 from sys import stdout as stdout
+from webber.core import edges
 from webber.xcoms import Promise, InvalidCallable
 from webber.viz import visualize_browser
 
@@ -145,7 +146,7 @@ class DAG:
             err_msg = f"{node}: requested node is not a callable Python function."
             raise TypeError(err_msg)
 
-        node_name = f"{node.__name__}__{uuid1()}"
+        node_name = edges.label_node(node)
 
         for arg in args:
             if isinstance(arg, Promise):
@@ -270,7 +271,7 @@ class DAG:
                     # and flag the callable for later addition if requested edge passes validation.
                     else:
                         new_callable  = u_of_edge
-                        outgoing_node = f"{u_of_edge.__name__}__{uuid1()}"
+                        outgoing_node = edges.label_node(u_of_edge)
 
                     incoming_node = v_of_edge
 
@@ -292,7 +293,7 @@ class DAG:
                     # and flag the callable for later addition if requested edge passes validation.
                     else:
                         new_callable  = v_of_edge
-                        incoming_node = f"{v_of_edge.__name__}__{uuid1()}"
+                        incoming_node = edges.label_node(v_of_edge)
 
                     outgoing_node = u_of_edge
 
@@ -359,7 +360,7 @@ class DAG:
             graph.nodes[node]['args'] = []
             graph.nodes[node]['kwargs'] = {}
 
-        graph = networkx.relabel_nodes(graph, lambda node: f"{node.__name__}__{uuid1()}")
+        graph = networkx.relabel_nodes(graph, lambda node: edges.label_node(node))
 
         self.root = list(filter(
             lambda node: len(list(graph.predecessors(node))) < 1,

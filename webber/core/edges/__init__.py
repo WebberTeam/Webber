@@ -1,5 +1,5 @@
-import uuid
 import networkx
+from uuid import uuid1
 from typing import Callable, Union
 
 def valid_node(node: Union[str, Callable]) -> bool:
@@ -28,5 +28,5 @@ def validate_nodes(u_of_edge: Union[str, Callable], v_of_edge: Union[str, Callab
     return True
 
 def label_node(node: Callable) -> str:
-    return f"{node.__name__}__{uuid.uuid1()}"
+    return f"{node.__name__}__{uuid1()}"
 
