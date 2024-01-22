@@ -5,7 +5,6 @@ import sys as _sys
 
 __version__ = '0.0.2'
 __supported__ = ("linux", "linux2", "win32")
-__all__ = ["DAG"]
 
 if _sys.platform not in __supported__:
     err_msg = f"Webber {__version__} is only supported on these platforms: {', '.join(__supported__)}"
