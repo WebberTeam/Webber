@@ -35,8 +35,7 @@ class _OutputLogger:
         stream_handler.setFormatter(self.format)
         self.logger.addHandler(stream_handler)
         self.logger.setLevel(self.level)
-        if file is _sys.stdout:
-            self._redirector = _contextlib.redirect_stdout(self)
+        self._redirector = _contextlib.redirect_stdout(self)
         # elif file is _stderr:
         #     self._redirector = _contextlib.redirect_stderr(self)
 
@@ -66,6 +65,13 @@ class DAG:
     """
     Directed Acyclic Graph used to represent Pythonic tasks in parallel.
     """
+    @property
+    def root(self):
+        return list(filter(
+            lambda node: len(list(self.graph.predecessors(node))) < 1,
+            self.graph.nodes.keys()
+        ))
+    
     class DAGExecutor: # pylint: disable=too-few-public-methods,too-many-locals
         """
         Base class used to execute DAG in embarrassingly parallel.
@@ -164,7 +170,6 @@ class DAG:
             name=node.__name__,
         )
 
-        self.root.append(node_name)
         return node_name
 
 
@@ -199,10 +204,6 @@ class DAG:
             outgoing_node = self.add_node(u_of_edge)
             incoming_node = self.add_node(v_of_edge)
             self.graph.add_edge(outgoing_node, incoming_node)
-            self.root = list(filter(
-                lambda node: len(list(self.graph.predecessors(node))) < 1,
-                self.graph.nodes.keys()
-            ))
             return (outgoing_node, incoming_node)
 
         node_names, node_callables = zip(*self.graph.nodes(data='callable'))
@@ -215,10 +216,6 @@ class DAG:
             if u_of_edge not in node_callables and v_of_edge not in node_callables:
                 outgoing_node = self.add_node(u_of_edge)
                 incoming_node = self.add_node(v_of_edge)
-                self.root = list(filter(
-                    lambda node: len(list(self.graph.predecessors(node))) < 1,
-                    self.graph.nodes.keys()
-                ))
                 return outgoing_node, incoming_node
 
             # Error Cases 0, 1: Either of the callables appear more than once in the DAG.
@@ -328,32 +325,15 @@ class DAG:
 
         # Then we can add the new edge and re-evaluate the roots in our graph.
         self.graph.add_edge(outgoing_node, incoming_node)
-        self.root = list(filter(
-            lambda node: len(list(self.graph.predecessors(node))) < 1,
-            self.graph.nodes.keys()
-        ))
         return (outgoing_node, incoming_node)
-
 
     def __init__(self, graph: _nx.DiGraph = None) -> None:
 
         if graph is None:
-            self.root = []
             self.graph = _nx.DiGraph()
             return
-
-        if not graph.is_directed():
-            err_msg = f"Directed graph must be defined as type {_nx.DiGraph.__name__}"
-            raise TypeError(err_msg)
-
-        if set(map(callable, list(graph.nodes.keys()))).issuperset({False}):
-            err_msg = "All registered nodes must be callable Python functions."
-            raise TypeError(err_msg)
-
-        if not _nx.is_directed_acyclic_graph(graph):
-            err_msg = "Directed acyclic graph must be properly defined --" \
-                    + "no cycles and one or more root nodes."
-            raise ValueError(err_msg)
+        
+        _edges.validate_dag(graph)
 
         # Define framework specific logic as nested dictionaries.
         for node in graph.nodes.keys():
@@ -363,13 +343,7 @@ class DAG:
             graph.nodes[node]['kwargs'] = {}
 
         graph = _nx.relabel_nodes(graph, lambda node: _edges.label_node(node))
-
-        self.root = list(filter(
-            lambda node: len(list(graph.predecessors(node))) < 1,
-            graph.nodes.keys()
-        ))
-        self.graph = graph
-
+        self.graph = _nx.DiGraph(graph)
 
     def execute(self, return_ref=False):
         """
@@ -379,12 +353,15 @@ class DAG:
         return executor if return_ref else None
 
 
-    def visualize(self, vis_type: _T.Literal['gui', 'browser'] = 'browser'):
+    def visualize(self, vis_type: _T.Literal['gui', 'browser', 'plt'] = 'browser'):
         """
         Basic wrapper to visualize DAG using Vis.js library.
         """
         if vis_type == 'browser':
             _viz.visualize_browser(self.graph)
+
+        elif vis_type == 'plt':
+            _viz.visualize_plt(self.graph)
 
         elif vis_type == 'gui':
             # _visualize_gui(self.graph)

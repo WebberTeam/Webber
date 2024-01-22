@@ -29,6 +29,26 @@ def validate_nodes(u_of_edge: _T.Union[str, _T.Callable], v_of_edge: _T.Union[st
     
     return True
 
+def validate_dag(graph: _nx.DiGraph):
+    if not graph.is_directed():
+        err_msg = f"Directed graph must be defined as type {_nx.DiGraph.__name__}"
+        raise TypeError(err_msg)
+
+    if set(map(callable, list(graph.nodes.keys()))).issuperset({False}):
+        err_msg = "All registered nodes must be callable Python functions."
+        raise TypeError(err_msg)
+
+    if not _nx.is_directed_acyclic_graph(graph):
+        err_msg = "Directed acyclic graph must be properly defined --" \
+                + "no cycles and one or more root nodes."
+        raise ValueError(err_msg)
+
+def get_root(graph: _nx.DiGraph) -> list:
+    return list(filter(
+        lambda node: len(list(graph.predecessors(node))) < 1,
+        graph.nodes.keys()
+    ))
+
 def label_node(node: _T.Callable) -> str:
     return f"{node.__name__}__{_uuid.uuid1()}"
 

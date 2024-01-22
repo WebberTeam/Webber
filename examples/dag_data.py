@@ -1,6 +1,7 @@
 """
 Simple demo of Webber's time-saving capabilities for Data Ops.
 """
+import os
 import time
 import requests
 import webber
@@ -30,7 +31,7 @@ if __name__ == "__main__":
     print("Data R/W in Sequence:")
     sync_time = time.time()
     for u in urls:
-        write_content(u, get_request(u), "/dev/null")
+        write_content(u, get_request(u), os.devnull)
     sync_time = time.time() - sync_time
 
     print()
@@ -38,7 +39,7 @@ if __name__ == "__main__":
     dag = webber.DAG()
     for u in urls:
         getter = dag.add_node(get_request, u)
-        writer = dag.add_node(write_content, u, Promise(getter), "/dev/null")
+        writer = dag.add_node(write_content, u, Promise(getter), os.devnull)
         dag.add_edge(getter, writer)
 
     dag_time = time.time()
