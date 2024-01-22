@@ -4,6 +4,8 @@ before_script:
   - pip install pdoc
   - pip install -e .
 
+on: workflow_dispatch
+
 pages:
   stage: deploy
   tags: [pages]
