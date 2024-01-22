@@ -1,22 +1,38 @@
 """
 Visualization library for Webber DAGs.
 
-Last updated by: June 1, 2021 (pre-0.0.1)
+Last updated by: Jan 22, 2024 (v0.0.2)
 """
-from json import dumps as _dumps
-from sys import platform as _platform
-from os.path import dirname as _dirname, abspath as _abspath, join as _join
-from flask import Flask as _Flask
-from networkx import DiGraph as _DiGraph
+import sys as _sys
+import json as _json
+import os.path as _path
+import flask as _flask
+import networkx as _nx
+import webber.xcoms as _xcoms
+import webber.edges as _edges
+import matplotlib.pyplot as _plt
 from pyvis.network import Network as _Network
-from webber.xcoms import Promise as _Promise
 # from PyQt6.QtWidgets import QApplication as _QApplication              # pylint: disable=no-name-in-module
 # from PyQt6.QtWebEngineCore import QWebEnginePage as _QWebEnginePage    # pylint: disable=no-name-in-module
 # from PyQt6.QtWebEngineWidgets import QWebEngineView as _QWebEngineView # pylint: disable=no-name-in-module
 
 from jinja2 import Environment as _Environment, FileSystemLoader as _FileSystemLoader
 
-def generate_pyvis_network(graph: _DiGraph) -> _Network:
+__all__ = ["generate_pyvis_network", "visualize_plt", "visualize_browser"]
+
+def visualize_plt(graph: _nx.DiGraph) -> list[str]:
+    for layer, nodes in enumerate(_nx.topological_generations(graph)):
+        for node in nodes:
+            graph.nodes[node]["layer"] = layer
+    graph = _nx.relabel_nodes(graph, lambda node: graph.nodes[node]["name"])
+    pos = _nx.multipartite_layout(graph, subset_key="layer")
+    fig, ax = _plt.subplots()
+    _nx.draw_networkx(graph, pos=pos, ax=ax)
+    ax.set_title("DAG layout in topological order")
+    fig.tight_layout()
+    _plt.show()
+
+def generate_pyvis_network(graph: _nx.DiGraph) -> _Network:
     """
     Generates basic network for visualization in Vis.js library.
 
@@ -36,19 +52,19 @@ def generate_pyvis_network(graph: _DiGraph) -> _Network:
         args, kwargs = [], {}
         for a in node['args']:
             try:
-                args.append(_dumps(a))
+                args.append(_json.dumps(a))
             except:
-                if isinstance(a, _Promise):
+                if isinstance(a, _xcoms.Promise):
                     args.append(f'Promise({a.key})')
                 else:
                     args.append(f'Object({str(a.__class__)})')
         for k,v in node['kwargs'].items():
             try:
-                _dumps(k)
+                _json.dumps(k)
                 try:
-                    kwargs[_dumps(k)] = _dumps(v)
+                    kwargs[_json.dumps(k)] = _json.dumps(v)
                 except:
-                    if isinstance(v, _Promise):
+                    if isinstance(v, _xcoms.Promise):
                         kwargs[k] = f"Promise('{v.key.split('__')[0]}')"
                     else:
                         kwargs[k] = f'Object({str(v.__class__)})'
@@ -64,7 +80,7 @@ def generate_pyvis_network(graph: _DiGraph) -> _Network:
 
         node_title += f"<br>uuid:    {n.split('__')[-1]}"
         node_title += f"<br>posargs: {', '.join(args)}" if args else ""
-        node_title += f"<br>kwargs:  {_dumps(kwargs)}" if kwargs else ""
+        node_title += f"<br>kwargs:  {_json.dumps(kwargs)}" if kwargs else ""
 
         network.add_node(
             n,
@@ -78,7 +94,7 @@ def generate_pyvis_network(graph: _DiGraph) -> _Network:
     return network
 
 
-def generate_vis_js_script(graph: _DiGraph) -> str:
+def generate_vis_js_script(graph: _nx.DiGraph) -> str:
     """
     Generates script for modeling Vis.js network graphs from a NetworkX DiGraph.
 
@@ -90,8 +106,8 @@ def generate_vis_js_script(graph: _DiGraph) -> str:
         network.get_network_data())
     )
 
-    script_js = "var nodes = new vis.DataSet(" + _dumps(network_data['nodes']) + """);\n"""
-    script_js += "var edges = new vis.DataSet(" + _dumps(network_data['edges']) + """);\n"""
+    script_js = "var nodes = new vis.DataSet(" + _json.dumps(network_data['nodes']) + """);\n"""
+    script_js += "var edges = new vis.DataSet(" + _json.dumps(network_data['edges']) + """);\n"""
     script_js += """var container = document.getElementById("mynetwork");\n"""
     script_js += """var data = { nodes: nodes, edges: edges, };\n"""
     script_js += """var options = {
@@ -143,7 +159,7 @@ def generate_vis_js_script(graph: _DiGraph) -> str:
     return script_js
 
 
-def generate_vis_html(graph: _DiGraph) -> str:
+def generate_vis_html(graph: _nx.DiGraph) -> str:
     """
     Generates HTML wrapper for Vis.js visualization -- used on both browser and GUI.
     """
@@ -159,8 +175,8 @@ def generate_vis_html(graph: _DiGraph) -> str:
 
     script = """<script type="text/javascript">\n""" + script + """</script>\n"""
 
-    root = _dirname(_abspath(__file__))
-    templates_dir = _join(root, 'templates')
+    root = _path.dirname(_path.abspath(__file__))
+    templates_dir = _path.join(root, 'templates')
     env = _Environment( loader = _FileSystemLoader(templates_dir) )
     template = env.get_template("vis_gui.html")
 
@@ -169,17 +185,17 @@ def generate_vis_html(graph: _DiGraph) -> str:
     )
 
 
-def visualize_browser(graph: _DiGraph):
+def visualize_browser(graph: _nx.DiGraph):
     """
     Visualizes Network graphs using a Flask app served to a desktop browser.
     """
-    if _platform not in ['darwin', 'win32', 'linux', 'linxu2']:
+    if _sys.platform not in ['darwin', 'win32', 'linux', 'linxu2']:
         err_msg = "Unknown/unsupported operating system for GUI visualizations."
         raise RuntimeError(err_msg)
 
     gui_html = generate_vis_html(graph)
 
-    server = _Flask(__name__)
+    server = _flask.Flask(__name__)
     server.add_url_rule("/", "index", lambda: gui_html)
 
     print('Serving visualization...\n')
@@ -189,11 +205,11 @@ def visualize_browser(graph: _DiGraph):
     print('\nVisualization closed.')
 
 
-# def visualize_gui(graph: _DiGraph):
+# def visualize_gui(graph: _nx.DiGraph):
 #     """
 #     Visualizes Network graphs using a desktop GUI generated by the PyQt6 library.
 #     """
-#     if _platform not in ['darwin', 'win32', 'linux', 'linxu2']:
+#     if sys.platform not in ['darwin', 'win32', 'linux', 'linxu2']:
 #         err_msg = "Unknown/unsupported operating system for GUI visualizations."
 #         raise RuntimeError(err_msg)
 

@@ -1,10 +1,14 @@
 """
 Webber: A Pythonic executor framework aimed at making parallel computing easy for everyone.
 """
-from sys import platform as _platform
-from .core import DAG
-_VERSION = "0.0.1"
-_supported = ["linux", "linux2"]
-if _platform not in _supported:
-    err_msg = f"Webber {_VERSION} is only supported on these platforms: {', '.join(_supported)}"
+import sys as _sys
+
+__version__ = '0.0.2'
+__supported__ = ("linux", "linux2", "win32")
+__all__ = ["DAG"]
+
+if _sys.platform not in __supported__:
+    err_msg = f"Webber {__version__} is only supported on these platforms: {', '.join(__supported__)}"
     raise NotImplementedError(err_msg)
+
+from .core import DAG
