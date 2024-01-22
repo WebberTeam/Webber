@@ -1,22 +1,16 @@
 """
 Base module for abstract multiprocessing system - a directed acyclic graph.
 """
-from copy import deepcopy
-import logging as _logging
-import contextlib as _contextlib
-from uuid import uuid1 as _uuid1
-from traceback import print_exc as _print_exc
+import networkx
+from uuid import uuid1
+import logging as logging
+import contextlib as contextlib
+from traceback import print_exc
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable as _Callable, Literal as _Literal, Tuple as _Tuple, Union as _Union
-from sys import stdout as _stdout
-from networkx import (
-    DiGraph as _DiGraph,
-    descendants as _descendants,
-    is_directed_acyclic_graph as _is_directed_acyclic_graph,
-    relabel_nodes as _relabel_nodes
-)
-from webber.xcoms import Promise as _Promise, InvalidCallable as _InvalidCallable
-from webber.viz import visualize_browser as _visualize_browser
+from typing import Callable, Literal, Tuple, Union
+from sys import stdout as stdout
+from webber.xcoms import Promise, InvalidCallable
+from webber.viz import visualize_browser
 
 class _OutputLogger:
     """
@@ -24,22 +18,22 @@ class _OutputLogger:
 
     Adapted from John Paton: https://johnpaton.net/posts/redirect-logging/
     """
-    def __init__(self, name="root", level="INFO", callable_name="root", file=_stdout) -> None:
+    def __init__(self, name="root", level="INFO", callable_name="root", file=stdout) -> None:
         """Initializes logger for given scope."""
-        self.logger    = _logging.getLogger(name)
+        self.logger    = logging.getLogger(name)
         self.name      = self.logger.name
         self.callable  = callable_name
-        self.level     = getattr(_logging, level)
-        self.format    = _logging.Formatter(
+        self.level     = getattr(logging, level)
+        self.format    = logging.Formatter(
                             "{asctime} " + f"{self.callable:>15}:" + " {message}",
                             style="{",
                         )
-        stream_handler = _logging.StreamHandler(file)
+        stream_handler = logging.StreamHandler(file)
         stream_handler.setFormatter(self.format)
         self.logger.addHandler(stream_handler)
         self.logger.setLevel(self.level)
-        if file is _stdout:
-            self._redirector = _contextlib.redirect_stdout(self)
+        if file is stdout:
+            self._redirector = contextlib.redirect_stdout(self)
         # elif file is _stderr:
         #     self._redirector = _contextlib.redirect_stderr(self)
 
@@ -62,7 +56,7 @@ class _OutputLogger:
         self._redirector.__exit__(exc_type, exc_value, traceback)
 
 def _event_wrapper(_callable: callable, _name: str, _args, _kwargs):
-    with _OutputLogger(str(_uuid1()), "INFO", _name) as _:
+    with _OutputLogger(str(uuid1()), "INFO", _name) as _:
         return _callable(*_args, **_kwargs)
 
 class DAG:
@@ -73,8 +67,8 @@ class DAG:
         """
         Base class used to execute DAG in embarrassingly parallel.
         """
-        def __init__(self, graph: _DiGraph, roots: list) -> None:
-            with _OutputLogger(str(_uuid1()), "INFO", "root") as _:
+        def __init__(self, graph: networkx.DiGraph, roots: list) -> None:
+            with _OutputLogger(str(uuid1()), "INFO", "root") as _:
                 # Initialize local variables for execution.
                 complete, started, failed, skipped = set(), set(), set(), set()
                 events = set(roots)
@@ -98,10 +92,10 @@ class DAG:
                                     try:
                                         raise refs[event].exception(timeout=0)
                                     except:                                                                             # pylint: disable=bare-except
-                                        _print_exc()
+                                        print_exc()
                                         print(f"Event {event} exited with exception, skipping dependent events...")     # pylint: disable=line-too-long
                                         failed.add(event)
-                                        skipped = skipped.union(_descendants(graph, event))
+                                        skipped = skipped.union(networkx.descendants(graph, event))
                                         started = started.union(skipped)
                                         events  = started.difference(complete.union(failed).union(skipped))             # pylint: disable=line-too-long
                                         continue
@@ -112,11 +106,11 @@ class DAG:
                                 ]
                                 for successor in successors:
                                     _args = [
-                                        a if not isinstance(a, _Promise) else refs[a.key].result()
+                                        a if not isinstance(a, Promise) else refs[a.key].result()
                                         for a in graph.nodes[successor]['args']
                                     ]
                                     _kwargs = {
-                                        k: v if not isinstance(v, _Promise) else refs[v.key].result()
+                                        k: v if not isinstance(v, Promise) else refs[v.key].result()
                                         for k, v in graph.nodes[successor]['kwargs'].items()
                                     }
                                     refs[successor] = executor.submit(
@@ -130,7 +124,7 @@ class DAG:
                         # Initialized nodes that are incomplete or not yet documented as complete.
                         events = started.difference(complete.union(failed).union(skipped))
 
-    def validate_promise(self, promise: _Promise) -> bool:
+    def validate_promise(self, promise: Promise) -> bool:
         """
         Returns True if a given Promise is valid, based on the DAG's current scope.
 
@@ -138,7 +132,7 @@ class DAG:
         """
         if promise.key not in self.graph.nodes:
             err_msg = f"Requested callable {promise.key} is not defined in DAG's scope."
-            raise _InvalidCallable(err_msg)
+            raise InvalidCallable(err_msg)
         return True
 
     def add_node(self, node, *args, **kwargs) -> str:
@@ -151,14 +145,14 @@ class DAG:
             err_msg = f"{node}: requested node is not a callable Python function."
             raise TypeError(err_msg)
 
-        node_name = f"{node.__name__}__{_uuid1()}"
+        node_name = f"{node.__name__}__{uuid1()}"
 
         for arg in args:
-            if isinstance(arg, _Promise):
+            if isinstance(arg, Promise):
                 self.validate_promise(arg)
 
         for val in kwargs.values():
-            if isinstance(val, _Promise):
+            if isinstance(val, Promise):
                 self.validate_promise(val)
 
         self.graph.add_node(
@@ -171,7 +165,7 @@ class DAG:
         return node_name
 
 
-    def add_edge(self, u_of_edge: _Union[str,_Callable], v_of_edge: _Union[str,_Callable]) -> _Tuple[str,str]: # pylint: disable=line-too-long,too-many-branches,too-many-statements
+    def add_edge(self, u_of_edge: Union[str,Callable], v_of_edge: Union[str,Callable]) -> Tuple[str,str]: # pylint: disable=line-too-long,too-many-branches,too-many-statements
         """
         Adds an edge between nodes in the DAG's underlying graph,
         so long as the requested edge is unique and has not been added previously.
@@ -276,7 +270,7 @@ class DAG:
                     # and flag the callable for later addition if requested edge passes validation.
                     else:
                         new_callable  = u_of_edge
-                        outgoing_node = f"{u_of_edge.__name__}__{_uuid1()}"
+                        outgoing_node = f"{u_of_edge.__name__}__{uuid1()}"
 
                     incoming_node = v_of_edge
 
@@ -298,7 +292,7 @@ class DAG:
                     # and flag the callable for later addition if requested edge passes validation.
                     else:
                         new_callable  = v_of_edge
-                        incoming_node = f"{v_of_edge.__name__}__{_uuid1()}"
+                        incoming_node = f"{v_of_edge.__name__}__{uuid1()}"
 
                     outgoing_node = u_of_edge
 
@@ -314,7 +308,7 @@ class DAG:
 
         # Error Case 7: Both callables exist only once in the DAG,
         # but adding an edge between them creates circular dependencies.
-        if not _is_directed_acyclic_graph(_DiGraph(test_edges)):
+        if not networkx.is_directed_acyclic_graph(networkx.DiGraph(test_edges)):
             err_msg = f"Requested edge ({outgoing_node}, {incoming_node}) " \
                     + "results in circular dependecies."
             raise ValueError(err_msg)
@@ -338,22 +332,22 @@ class DAG:
         return (outgoing_node, incoming_node)
 
 
-    def __init__(self, graph: _DiGraph = None) -> None:
+    def __init__(self, graph: networkx.DiGraph = None) -> None:
 
         if graph is None:
             self.root = []
-            self.graph = _DiGraph()
+            self.graph = networkx.DiGraph()
             return
 
         if not graph.is_directed():
-            err_msg = f"Directed graph must be defined as type {_DiGraph.__name__}"
+            err_msg = f"Directed graph must be defined as type {networkx.DiGraph.__name__}"
             raise TypeError(err_msg)
 
         if set(map(callable, list(graph.nodes.keys()))).issuperset({False}):
             err_msg = "All registered nodes must be callable Python functions."
             raise TypeError(err_msg)
 
-        if not _is_directed_acyclic_graph(graph):
+        if not networkx.is_directed_acyclic_graph(graph):
             err_msg = "Directed acyclic graph must be properly defined --" \
                     + "no cycles and one or more root nodes."
             raise ValueError(err_msg)
@@ -365,7 +359,7 @@ class DAG:
             graph.nodes[node]['args'] = []
             graph.nodes[node]['kwargs'] = {}
 
-        graph = _relabel_nodes(graph, lambda node: f"{node.__name__}__{_uuid1()}")
+        graph = networkx.relabel_nodes(graph, lambda node: f"{node.__name__}__{uuid1()}")
 
         self.root = list(filter(
             lambda node: len(list(graph.predecessors(node))) < 1,
@@ -382,12 +376,12 @@ class DAG:
         return executor if return_ref else None
 
 
-    def visualize(self, vis_type: _Literal['gui', 'browser'] = 'browser'):
+    def visualize(self, vis_type: Literal['gui', 'browser'] = 'browser'):
         """
         Basic wrapper to visualize DAG using Vis.js library.
         """
         if vis_type == 'browser':
-            _visualize_browser(self.graph)
+            visualize_browser(self.graph)
 
         elif vis_type == 'gui':
             # _visualize_gui(self.graph)
