@@ -84,6 +84,20 @@ class DAG:
                 complete, started, failed, skipped = set(), set(), set(), set()
                 events = set(roots)
                 refs = {}
+
+                def run_conditions_met(n):
+                    for p in graph.predecessors(n):
+                        match graph.edges.get((p, n))['Condition']:
+                            case Condition.Success:
+                                if p not in complete:
+                                    return False
+                            case Condition.Failure:
+                                if p not in failed:
+                                    return False
+                            case Condition.AnyCase:
+                                pass
+                        return True
+
                 # Start execution of root node functions.
                 with _futures.ThreadPoolExecutor() as executor:
                     for event in events:
@@ -111,33 +125,19 @@ class DAG:
                                             e[1] for e in set(graph.out_edges(event)) 
                                             if not _edges.continue_on_failure(graph.edges.get(e))
                                         ]
-                                        skipped  = skipped.union(skipping)
-                                        carryon  = set(_nx.descendants(graph, event)).difference(skipping)
-                                        for successor in carryon:
-                                            _args = [
-                                                a if not isinstance(a, _xcoms.Promise) else refs[a.key].result()
-                                                for a in graph.nodes[successor]['args']
-                                            ]
-                                            _kwargs = {
-                                                k: v if not isinstance(v, _xcoms.Promise) else refs[v.key].result()
-                                                for k, v in graph.nodes[successor]['kwargs'].items()
-                                            }
-                                            refs[successor] = executor.submit(
-                                                _event_wrapper,
-                                                _callable=graph.nodes[successor]['callable'],
-                                                _name=graph.nodes[successor]['name'],
-                                                _args=_args,
-                                                _kwargs=_kwargs
-                                            )
-                                        started  = started.union(_nx.descendants(graph, event))
-                                        events   = started.difference(complete.union(failed).union(skipped))
-                                        continue
-                                complete.add(event)
-                                successors = [
-                                    successor for successor in list(graph.successors(event)) if
-                                    complete.issuperset(set(graph.predecessors(successor)))
+                                else:
+                                    complete.add(event)
+                                    skipping = [
+                                        e[1] for e in set(graph.out_edges(event)) 
+                                        if not _edges.continue_on_success(graph.edges.get(e))
+                                    ]
+                                skipped  = skipped.union(skipping)
+                                carryon  = set(graph.successors(event)).difference(skipping)
+                                starting = [
+                                    successor for successor in carryon if
+                                    run_conditions_met(successor)
                                 ]
-                                for successor in successors:
+                                for successor in starting:
                                     _args = [
                                         a if not isinstance(a, _xcoms.Promise) else refs[a.key].result()
                                         for a in graph.nodes[successor]['args']
@@ -370,6 +370,14 @@ class DAG:
             graph.nodes[node]['args'] = []
             graph.nodes[node]['kwargs'] = {}
 
+        for e in graph.edges:
+            condition = graph.edges[e].get('Condition')
+            if condition is not None:
+                if condition not in Condition:
+                    raise TypeError(e, 'Edge conditions must belong to IntEnum type Webber.Condition.')
+            else:
+                graph.edges[e]['Condition'] = Condition.Success
+            
         graph = _nx.relabel_nodes(graph, lambda node: _edges.label_node(node))
         self.graph = _nx.DiGraph(graph)
 

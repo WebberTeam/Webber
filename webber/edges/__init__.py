@@ -5,17 +5,16 @@ import enum as _enum
 
 __all__ = ["valid_node", "valid_nodes", "valid_dag", "validate_nodes", "label_node"]
 
-class Condition(_enum.Enum):
+class Condition(_enum.IntEnum):
     Success = 0
     Failure = 1
-    Skip    = 2
     AnyCase = 3
 
 def continue_on_failure(edge: dict) -> bool:
     return edge['Condition'] in (Condition.Failure, Condition.AnyCase)
 
-def continue_on_skip(edge: dict) -> bool:
-    return edge['Condition'] in (Condition.Skip, Condition.AnyCase)
+def continue_on_success(edge: dict) -> bool:
+    return edge['Condition'] in (Condition.Success, Condition.AnyCase)
 
 def valid_node(node: _T.Union[str, _T.Callable]) -> bool:
     return (isinstance(node,str) or callable(node))
