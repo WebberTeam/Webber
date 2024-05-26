@@ -9,8 +9,8 @@ import os.path as _path
 import flask as _flask
 import networkx as _nx
 import webber.xcoms as _xcoms
-import webber.edges as _edges
 import matplotlib.pyplot as _plt
+from webber.edges import Condition
 from pyvis.network import Network as _Network
 # from PyQt6.QtWidgets import QApplication as _QApplication              # pylint: disable=no-name-in-module
 # from PyQt6.QtWebEngineCore import QWebEnginePage as _QWebEnginePage    # pylint: disable=no-name-in-module
@@ -19,6 +19,12 @@ from pyvis.network import Network as _Network
 from jinja2 import Environment as _Environment, FileSystemLoader as _FileSystemLoader
 
 __all__ = ["generate_pyvis_network", "visualize_plt", "visualize_browser"]
+
+edge_colors: dict[Condition, str] = {
+    Condition.Success: 'blue',
+    Condition.AnyCase: 'green',
+    Condition.Failure: 'red'
+}
 
 def visualize_plt(graph: _nx.DiGraph) -> list[str]:
     for layer, nodes in enumerate(_nx.topological_generations(graph)):
@@ -44,8 +50,9 @@ def generate_pyvis_network(graph: _nx.DiGraph) -> _Network:
 
     network = _Network(
         directed=True,
-        layout='hierarchical',
+        layout='hierarchical'
     )
+    network.inherit_edge_colors(False)
 
     generations = [sorted(generation) for generation in _nx.topological_generations(graph)]
     node_generation = lambda n: [i for i, G in enumerate(generations) if n in G][0]
@@ -93,8 +100,11 @@ def generate_pyvis_network(graph: _nx.DiGraph) -> _Network:
             labelHighlightBold=True,
             level=node_generation(n)
         )
+
     for source_edge, dest_edge in graph.edges:
-        network.add_edge(source_edge, dest_edge)
+        condition: Condition = graph.edges.get((source_edge, dest_edge))['Condition']
+        network.add_edge(source_edge, dest_edge, color=edge_colors[condition])
+    
     return network
 
 
@@ -121,7 +131,7 @@ def generate_vis_js_script(graph: _nx.DiGraph) -> str:
                     },
                     "edges": {
                         "color": {
-                            "inherit": true
+                            "inherit": false
                         },
                         "smooth": {
                             "enabled": false,
