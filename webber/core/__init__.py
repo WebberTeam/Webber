@@ -132,7 +132,9 @@ class DAG:
                                         if not _edges.continue_on_success(graph.edges.get(e))
                                     ]
                                 skipped  = skipped.union(skipping)
-                                carryon  = set(graph.successors(event)).difference(skipping)
+                                for n in skipping:
+                                    skipped  = skipped.union(_nx.descendants(graph, n))
+                                carryon  = set(graph.successors(event)).difference(skipped)
                                 starting = [
                                     successor for successor in carryon if
                                     run_conditions_met(successor)
