@@ -50,5 +50,4 @@ def get_root(graph: _nx.DiGraph) -> list:
     ))
 
 def label_node(node: _T.Callable) -> str:
-    return f"{node.__name__}__{_uuid.uuid1()}"
-
+    return f"{node.__name__}__{_uuid.uuid4()}"

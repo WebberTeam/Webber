@@ -58,7 +58,7 @@ class _OutputLogger:
         self._redirector.__exit__(exc_type, exc_value, traceback)
 
 def _event_wrapper(_callable: callable, _name: str, _args, _kwargs):
-    with _OutputLogger(str(_uuid.uuid1()), "INFO", _name) as _:
+    with _OutputLogger(str(_uuid.uuid4()), "INFO", _name) as _:
         return _callable(*_args, **_kwargs)
 
 class DAG:
