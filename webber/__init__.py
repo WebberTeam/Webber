@@ -10,4 +10,4 @@ if _sys.platform not in __supported__:
     err_msg = f"Webber {__version__} is only supported on these platforms: {', '.join(__supported__)}"
     raise NotImplementedError(err_msg)
 
-from .core import DAG
+from .core import DAG, Condition

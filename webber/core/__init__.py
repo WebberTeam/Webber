@@ -13,7 +13,9 @@ import webber.edges as _edges
 import webber.xcoms as _xcoms
 import webber.viz as _viz
 
-__all__ = ["DAG"]
+from webber.edges import Condition
+
+__all__ = ["DAG", "Condition"]
 
 class _OutputLogger:
     """
@@ -105,9 +107,30 @@ class DAG:
                                             _traceback.print_exc()
                                         print(f"Event {event} exited with exception, skipping dependent events...")
                                         failed.add(event)
-                                        skipped = skipped.union(_nx.descendants(graph, event))
-                                        started = started.union(skipped)
-                                        events  = started.difference(complete.union(failed).union(skipped))             # pylint: disable=line-too-long
+                                        skipping = [
+                                            e[1] for e in set(graph.out_edges(event)) 
+                                            if not _edges.continue_on_failure(graph.edges.get(e))
+                                        ]
+                                        skipped  = skipped.union(skipping)
+                                        carryon  = set(_nx.descendants(graph, event)).difference(skipping)
+                                        for successor in carryon:
+                                            _args = [
+                                                a if not isinstance(a, _xcoms.Promise) else refs[a.key].result()
+                                                for a in graph.nodes[successor]['args']
+                                            ]
+                                            _kwargs = {
+                                                k: v if not isinstance(v, _xcoms.Promise) else refs[v.key].result()
+                                                for k, v in graph.nodes[successor]['kwargs'].items()
+                                            }
+                                            refs[successor] = executor.submit(
+                                                _event_wrapper,
+                                                _callable=graph.nodes[successor]['callable'],
+                                                _name=graph.nodes[successor]['name'],
+                                                _args=_args,
+                                                _kwargs=_kwargs
+                                            )
+                                        started  = started.union(_nx.descendants(graph, event))
+                                        events   = started.difference(complete.union(failed).union(skipped))
                                         continue
                                 complete.add(event)
                                 successors = [
@@ -174,7 +197,11 @@ class DAG:
         return node_name
 
 
-    def add_edge(self, u_of_edge: _T.Union[str,_T.Callable], v_of_edge: _T.Union[str,_T.Callable]) -> _T.Tuple[str,str]: # pylint: disable=line-too-long,too-many-branches,too-many-statements
+    def add_edge(
+            self, 
+            u_of_edge: _T.Union[str,_T.Callable], v_of_edge: _T.Union[str,_T.Callable],
+            continue_on: Condition = Condition.Success
+        ) -> _T.Tuple[str,str]: # pylint: disable=line-too-long,too-many-branches,too-many-statements
         """
         Adds an edge between nodes in the DAG's underlying graph,
         so long as the requested edge is unique and has not been added previously.
@@ -204,7 +231,7 @@ class DAG:
                 raise ValueError(err_msg)
             outgoing_node = self.add_node(u_of_edge)
             incoming_node = self.add_node(v_of_edge)
-            self.graph.add_edge(outgoing_node, incoming_node)
+            self.graph.add_edge(outgoing_node, incoming_node, Condition = continue_on)
             return (outgoing_node, incoming_node)
 
         node_names, node_callables = zip(*self.graph.nodes(data='callable'))
@@ -325,7 +352,7 @@ class DAG:
             incoming_node = self.add_node(v_of_edge)
 
         # Then we can add the new edge and re-evaluate the roots in our graph.
-        self.graph.add_edge(outgoing_node, incoming_node)
+        self.graph.add_edge(outgoing_node, incoming_node, Condition = continue_on)
         return (outgoing_node, incoming_node)
 
     def __init__(self, graph: _nx.DiGraph = None) -> None:
