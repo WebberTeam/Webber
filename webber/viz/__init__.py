@@ -47,6 +47,9 @@ def generate_pyvis_network(graph: _nx.DiGraph) -> _Network:
         layout='hierarchical',
     )
 
+    generations = [sorted(generation) for generation in _nx.topological_generations(graph)]
+    node_generation = lambda n: [i for i, G in enumerate(generations) if n in G][0]
+
     for n in graph.nodes:
         node = graph.nodes[n]
         args, kwargs = [], {}
@@ -87,7 +90,8 @@ def generate_pyvis_network(graph: _nx.DiGraph) -> _Network:
             label=node['name'],
             shape='circle' if len(graph) < 4 else 'box',
             title= node_title,
-            labelHighlightBold=True
+            labelHighlightBold=True,
+            level=node_generation(n)
         )
     for source_edge, dest_edge in graph.edges:
         network.add_edge(source_edge, dest_edge)
@@ -134,7 +138,8 @@ def generate_vis_js_script(graph: _nx.DiGraph) -> str:
                     },
                     "layout": {
                         "hierarchical": {
-                            "direction": "UD",                            "blockShifting": true,
+                            "direction": "UD",
+                            "blockShifting": true,
                             "edgeMinimization": false,
                             "enabled": true,
                             "parentCentralization": true,
