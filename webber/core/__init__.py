@@ -76,8 +76,8 @@ class DAG:
         """
         Base class used to execute DAG in embarrassingly parallel.
         """
-        def __init__(self, graph: _nx.DiGraph, roots: list) -> None:
-            with _OutputLogger(str(_uuid.uuid1()), "INFO", "root") as _:
+        def __init__(self, graph: _nx.DiGraph, roots: list, print_exc: bool = False) -> None:
+            with _OutputLogger(str(_uuid.uuid4()), "INFO", "root") as _:
                 # Initialize local variables for execution.
                 complete, started, failed, skipped = set(), set(), set(), set()
                 events = set(roots)
@@ -100,9 +100,10 @@ class DAG:
                                 if refs[event].exception(timeout=0) is not None:
                                     try:
                                         raise refs[event].exception(timeout=0)
-                                    except:                                                                             # pylint: disable=bare-except
-                                        _traceback.print_exc()
-                                        print(f"Event {event} exited with exception, skipping dependent events...")     # pylint: disable=line-too-long
+                                    except:
+                                        if print_exc:
+                                            _traceback.print_exc()
+                                        print(f"Event {event} exited with exception, skipping dependent events...")
                                         failed.add(event)
                                         skipped = skipped.union(_nx.descendants(graph, event))
                                         started = started.union(skipped)
@@ -345,11 +346,11 @@ class DAG:
         graph = _nx.relabel_nodes(graph, lambda node: _edges.label_node(node))
         self.graph = _nx.DiGraph(graph)
 
-    def execute(self, return_ref=False):
+    def execute(self, return_ref=False, print_exc=False):
         """
         Basic wrapper for execution of the DAG's underlying callables.
         """
-        executor = self.DAGExecutor(self.graph, self.root)
+        executor = self.DAGExecutor(self.graph, self.root, print_exc)
         return executor if return_ref else None
 
 
