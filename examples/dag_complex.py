@@ -3,6 +3,9 @@ A simple example of Webber's functionality --
 Compares overhead of synchronous exection in Webber with Python proper,
 generally on the magnitude of hundreths of seconds.
 """
+
+#TODO: Investigate why this repeats itself.
+
 from time import sleep, time
 from typing import Union
 from webber import DAG

@@ -36,7 +36,8 @@ if __name__ == "__main__":
     dep_event: str = dag.add_node(dependent)
 
     _ = dag.add_edge(err_event, dependent)
-    _ = dag.add_edge(err_event, follower, continue_on=webber.Condition.Failure)
+    _ = dag.add_edge(ind_event, follower)
+    _ = dag.add_edge(err_event, follower, continue_on=webber.Condition.AnyCase)
     
     dag.execute(print_exc=False)
     dag.visualize()
