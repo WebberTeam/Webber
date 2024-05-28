@@ -13,7 +13,9 @@ import webber.edges as _edges
 import webber.xcoms as _xcoms
 import webber.viz as _viz
 
-__all__ = ["DAG"]
+from webber.edges import Condition
+
+__all__ = ["DAG", "Condition"]
 
 class _OutputLogger:
     """
@@ -58,7 +60,7 @@ class _OutputLogger:
         self._redirector.__exit__(exc_type, exc_value, traceback)
 
 def _event_wrapper(_callable: callable, _name: str, _args, _kwargs):
-    with _OutputLogger(str(_uuid.uuid1()), "INFO", _name) as _:
+    with _OutputLogger(str(_uuid.uuid4()), "INFO", _name) as _:
         return _callable(*_args, **_kwargs)
 
 class DAG:
@@ -76,21 +78,66 @@ class DAG:
         """
         Base class used to execute DAG in embarrassingly parallel.
         """
-        def __init__(self, graph: _nx.DiGraph, roots: list) -> None:
-            with _OutputLogger(str(_uuid.uuid1()), "INFO", "root") as _:
+        def __init__(self, graph: _nx.DiGraph, roots: list, print_exc: bool = False) -> None:
+            with _OutputLogger(str(_uuid.uuid4()), "INFO", "root") as _:
                 # Initialize local variables for execution.
                 complete, started, failed, skipped = set(), set(), set(), set()
                 events = set(roots)
-                refs = {}
+                refs: dict[str, _futures.Future] = {}
+
+                def run_conditions_met(n):
+                    for p in graph.predecessors(n):
+                        match graph.edges.get((p, n))['Condition']:
+                            case Condition.Success:
+                                if p not in complete:
+                                    return False
+                            case Condition.Failure:
+                                if p not in failed:
+                                    return False
+                            case Condition.AnyCase:
+                                pass
+                    return True
+
+                skip  = graph.nodes.data("skip", default=False) 
+                retry = {n: [c+1, {}] for n,c in graph.nodes.data("retry", default=0)}
+
                 # Start execution of root node functions.
                 with _futures.ThreadPoolExecutor() as executor:
+
+                    def Submit(event, callable, name, args, kwargs):
+                        if skip[event]:
+                            retry[event][0] = 0
+                            return executor.submit(
+                                _event_wrapper,
+                                _callable=print,
+                                _name=graph.nodes[event]['name'],
+                                _args=[f"Event {event} skipped. Continuing to dependencies..."],
+                                _kwargs={}
+                            )
+                        else:
+                            retry[event][0] -= 1
+                            if (retry[event][0] > 0) and (retry[event][1] == {}):
+                                retry[event][1] = {
+                                    'callable': callable,
+                                    'name': name,
+                                    'args': args,
+                                    'kwargs': kwargs
+                                }
+                            return executor.submit(
+                                _event_wrapper,
+                                _callable=callable,
+                                _name=name,
+                                _args=args,
+                                _kwargs=kwargs
+                            )
+
                     for event in events:
-                        refs[event] = executor.submit(
-                            _event_wrapper,
-                            _callable=graph.nodes[event]['callable'],
-                            _name=graph.nodes[event]['name'],
-                            _args=graph.nodes[event]['args'],
-                            _kwargs=graph.nodes[event]['kwargs']
+                        refs[event] = Submit(
+                            event,
+                            graph.nodes[event]['callable'],
+                            graph.nodes[event]['name'],
+                            graph.nodes[event]['args'],
+                            graph.nodes[event]['kwargs']
                         )
                         started.add(event)
                     # Loop until all nodes in the network are executed.
@@ -100,20 +147,42 @@ class DAG:
                                 if refs[event].exception(timeout=0) is not None:
                                     try:
                                         raise refs[event].exception(timeout=0)
-                                    except:                                                                             # pylint: disable=bare-except
-                                        _traceback.print_exc()
-                                        print(f"Event {event} exited with exception, skipping dependent events...")     # pylint: disable=line-too-long
+                                    except:
+                                        if print_exc:
+                                            _traceback.print_exc()
+                                        
+                                        if retry[event][0] > 0:
+                                            print(f"Event {event} exited with exception, retrying...")
+                                            refs[event] = Submit(
+                                                event,
+                                                callable=retry[event][1]['callable'],
+                                                name=retry[event][1]['name'],
+                                                args=retry[event][1]['args'],
+                                                kwargs=retry[event][1]['kwargs']
+                                            )
+                                            continue                                            
+
+                                        print(f"Event {event} exited with exception, skipping dependent events...")
                                         failed.add(event)
-                                        skipped = skipped.union(_nx.descendants(graph, event))
-                                        started = started.union(skipped)
-                                        events  = started.difference(complete.union(failed).union(skipped))             # pylint: disable=line-too-long
-                                        continue
-                                complete.add(event)
-                                successors = [
-                                    successor for successor in list(graph.successors(event)) if
-                                    complete.issuperset(set(graph.predecessors(successor)))
+                                        skipping = [
+                                            e[1] for e in set(graph.out_edges(event)) 
+                                            if not _edges.continue_on_failure(graph.edges.get(e))
+                                        ]
+                                else:
+                                    complete.add(event)
+                                    skipping = [
+                                        e[1] for e in set(graph.out_edges(event)) 
+                                        if not _edges.continue_on_success(graph.edges.get(e))
+                                    ]
+                                skipped  = skipped.union(skipping)
+                                for n in skipping:
+                                    skipped  = skipped.union(_nx.descendants(graph, n))
+                                carryon  = set(graph.successors(event)).difference(skipped)
+                                starting = [
+                                    successor for successor in carryon if
+                                    run_conditions_met(successor)
                                 ]
-                                for successor in successors:
+                                for successor in starting:
                                     _args = [
                                         a if not isinstance(a, _xcoms.Promise) else refs[a.key].result()
                                         for a in graph.nodes[successor]['args']
@@ -122,12 +191,12 @@ class DAG:
                                         k: v if not isinstance(v, _xcoms.Promise) else refs[v.key].result()
                                         for k, v in graph.nodes[successor]['kwargs'].items()
                                     }
-                                    refs[successor] = executor.submit(
-                                        _event_wrapper,
-                                        _callable=graph.nodes[successor]['callable'],
-                                        _name=graph.nodes[successor]['name'],
-                                        _args=_args,
-                                        _kwargs=_kwargs
+                                    refs[successor] = Submit(
+                                        successor,
+                                        graph.nodes[successor]['callable'],
+                                        graph.nodes[successor]['name'],
+                                        _args,
+                                        _kwargs
                                     )
                                     started.add(successor)
                         # Initialized nodes that are incomplete or not yet documented as complete.
@@ -173,7 +242,11 @@ class DAG:
         return node_name
 
 
-    def add_edge(self, u_of_edge: _T.Union[str,_T.Callable], v_of_edge: _T.Union[str,_T.Callable]) -> _T.Tuple[str,str]: # pylint: disable=line-too-long,too-many-branches,too-many-statements
+    def add_edge(
+            self, 
+            u_of_edge: _T.Union[str,_T.Callable], v_of_edge: _T.Union[str,_T.Callable],
+            continue_on: Condition = Condition.Success
+        ) -> _T.Tuple[str,str]: # pylint: disable=line-too-long,too-many-branches,too-many-statements
         """
         Adds an edge between nodes in the DAG's underlying graph,
         so long as the requested edge is unique and has not been added previously.
@@ -203,7 +276,7 @@ class DAG:
                 raise ValueError(err_msg)
             outgoing_node = self.add_node(u_of_edge)
             incoming_node = self.add_node(v_of_edge)
-            self.graph.add_edge(outgoing_node, incoming_node)
+            self.graph.add_edge(outgoing_node, incoming_node, Condition = continue_on)
             return (outgoing_node, incoming_node)
 
         node_names, node_callables = zip(*self.graph.nodes(data='callable'))
@@ -324,8 +397,70 @@ class DAG:
             incoming_node = self.add_node(v_of_edge)
 
         # Then we can add the new edge and re-evaluate the roots in our graph.
-        self.graph.add_edge(outgoing_node, incoming_node)
+        self.graph.add_edge(outgoing_node, incoming_node, Condition = continue_on)
         return (outgoing_node, incoming_node)
+
+    def retry_node(self, identifier: _T.Union[str,_T.Callable], count: int):
+        """
+        """
+        if not isinstance(count, int) and not count > 0:
+            raise ValueError("Retry count must be a positive integer.")
+
+        node_names, node_callables = zip(*self.graph.nodes(data='callable'))
+
+        if isinstance(identifier, str):
+            if identifier not in node_names:
+                err_msg = f"Node {identifier} is not defined in this DAG's scope."
+                raise ValueError(err_msg)
+            node = identifier
+        elif isinstance(identifier, callable):
+            match node_callables.count(identifier):
+                case 0:
+                    err_msg = f"Callable {identifier} is not defined in this DAG's scope."
+                    raise ValueError(err_msg)
+                case 1:
+                    node = node_names[ node_callables.index(identifier) ]
+                case _:
+                    err_msg = f"Callable {identifier.__name__} " \
+                            + "exists more than once in this DAG. " \
+                            + "Use the unique identifier of the required node."
+                    raise ValueError(err_msg)
+        else:            
+            err_msg = f"Node {identifier} must be a string or a Python callable"
+            raise TypeError(err_msg)
+        
+        self.graph.nodes[node]['retry'] = count
+
+    def skip_node(self, identifier: _T.Union[str,_T.Callable], skip: bool = True):
+        """
+        """
+        if not isinstance(skip, bool):
+            raise ValueError("Skip argument must be a boolean value.")
+
+        node_names, node_callables = zip(*self.graph.nodes(data='callable'))
+
+        if isinstance(identifier, str):
+            if identifier not in node_names:
+                err_msg = f"Node {identifier} is not defined in this DAG's scope."
+                raise ValueError(err_msg)
+            node = identifier
+        elif isinstance(identifier, callable):
+            match node_callables.count(identifier):
+                case 0:
+                    err_msg = f"Callable {identifier} is not defined in this DAG's scope."
+                    raise ValueError(err_msg)
+                case 1:
+                    node = node_names[ node_callables.index(identifier) ]
+                case _:
+                    err_msg = f"Callable {identifier.__name__} " \
+                            + "exists more than once in this DAG. " \
+                            + "Use the unique identifier of the required node."
+                    raise ValueError(err_msg)
+        else:            
+            err_msg = f"Node {identifier} must be a string or a Python callable"
+            raise TypeError(err_msg)
+        
+        self.graph.nodes[node]['skip'] = skip
 
     def __init__(self, graph: _nx.DiGraph = None) -> None:
 
@@ -342,14 +477,22 @@ class DAG:
             graph.nodes[node]['args'] = []
             graph.nodes[node]['kwargs'] = {}
 
+        for e in graph.edges:
+            condition = graph.edges[e].get('Condition')
+            if condition is not None:
+                if condition not in Condition:
+                    raise TypeError(e, 'Edge conditions must belong to IntEnum type Webber.Condition.')
+            else:
+                graph.edges[e]['Condition'] = Condition.Success
+            
         graph = _nx.relabel_nodes(graph, lambda node: _edges.label_node(node))
         self.graph = _nx.DiGraph(graph)
 
-    def execute(self, return_ref=False):
+    def execute(self, return_ref=False, print_exc=False):
         """
         Basic wrapper for execution of the DAG's underlying callables.
         """
-        executor = self.DAGExecutor(self.graph, self.root)
+        executor = self.DAGExecutor(self.graph, self.root, print_exc)
         return executor if return_ref else None
 
 

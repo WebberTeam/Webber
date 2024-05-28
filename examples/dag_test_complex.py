@@ -1,3 +1,5 @@
+## DEPRECATED / NOT CURRENTLY SUPPORTED
+
 """
 A simple example of Webber's functionality --
 Compares overhead of synchronous exection in Webber with Python proper,

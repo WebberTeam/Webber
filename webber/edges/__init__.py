@@ -1,8 +1,20 @@
 import typing as _T
 import uuid as _uuid
 import networkx as _nx
+import enum as _enum
 
 __all__ = ["valid_node", "valid_nodes", "valid_dag", "validate_nodes", "label_node"]
+
+class Condition(_enum.IntEnum):
+    Success = 0
+    Failure = 1
+    AnyCase = 3
+
+def continue_on_failure(edge: dict) -> bool:
+    return edge['Condition'] in (Condition.Failure, Condition.AnyCase)
+
+def continue_on_success(edge: dict) -> bool:
+    return edge['Condition'] in (Condition.Success, Condition.AnyCase)
 
 def valid_node(node: _T.Union[str, _T.Callable]) -> bool:
     return (isinstance(node,str) or callable(node))
@@ -50,5 +62,4 @@ def get_root(graph: _nx.DiGraph) -> list:
     ))
 
 def label_node(node: _T.Callable) -> str:
-    return f"{node.__name__}__{_uuid.uuid1()}"
-
+    return f"{node.__name__}__{_uuid.uuid4()}"
