@@ -96,7 +96,7 @@ class DAG:
                                     return False
                             case Condition.AnyCase:
                                 pass
-                        return True
+                    return True
 
                 skip  = graph.nodes.data("skip", default=False) 
                 retry = {n: [c+1, {}] for n,c in graph.nodes.data("retry", default=0)}
