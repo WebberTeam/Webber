@@ -7,6 +7,7 @@ import uuid as _uuid
 import logging as _logging
 import traceback as _traceback
 import contextlib as _contextlib
+import collections.abc as _abc
 import concurrent.futures as _futures
 import networkx as _nx
 import webber.edges as _edges
@@ -73,6 +74,54 @@ class DAG:
             lambda node: len(list(self.graph.predecessors(node))) < 1,
             self.graph.nodes.keys()
         ))
+    
+    def _node_id(self, identifier: _T.Union[str,_T.Callable]) -> str:
+        """
+        Meant for internal use only -- validate whether identifier given is a
+        valid node within the DAG's scope.
+        """
+        node_names, node_callables = zip(*self.graph.nodes(data='callable'))
+
+        if isinstance(identifier, str):
+            if identifier not in node_names:
+                err_msg = f"Node {identifier} is not defined in this DAG's scope."
+                raise ValueError(err_msg)
+            node = identifier
+        elif callable(identifier):
+            match node_callables.count(identifier):
+                case 0:
+                    err_msg = f"Callable {identifier} is not defined in this DAG's scope."
+                    raise ValueError(err_msg)
+                case 1:
+                    node = node_names[ node_callables.index(identifier) ]
+                case _:
+                    err_msg = f"Callable {identifier.__name__} " \
+                            + "exists more than once in this DAG. " \
+                            + "Use the unique identifier of the required node."
+                    raise ValueError(err_msg)
+        else:            
+            err_msg = f"Node {identifier} must be a string or a Python callable"
+            raise TypeError(err_msg)
+        return node
+    
+    def _subgraph(self, node_ids: set[str]):
+        parent_nodes = set()
+        for node in node_ids:
+            parent_nodes = parent_nodes.union(set(self.graph.predecessors(node)))
+        while parent_nodes:
+            node_ids = node_ids.union(parent_nodes)
+            parent_nodes, child_nodes = set(), parent_nodes
+            for node in child_nodes:
+                parent_nodes = parent_nodes.union(set(self.graph.predecessors(node)))
+        subgraph = self.graph.subgraph(node_ids)
+        return DAG(subgraph, __force=True)
+
+    def critical_path(self, nodes):
+        if isinstance(nodes, _abc.Iterable) and not isinstance(nodes, str):
+            node_ids = {self._node_id(n) for n in nodes}
+        else:
+            node_ids = {self._node_id(nodes)}
+        return self._subgraph(node_ids)
     
     class DAGExecutor: # pylint: disable=too-few-public-methods,too-many-locals
         """
@@ -405,30 +454,7 @@ class DAG:
         """
         if not isinstance(count, int) and not count > 0:
             raise ValueError("Retry count must be a positive integer.")
-
-        node_names, node_callables = zip(*self.graph.nodes(data='callable'))
-
-        if isinstance(identifier, str):
-            if identifier not in node_names:
-                err_msg = f"Node {identifier} is not defined in this DAG's scope."
-                raise ValueError(err_msg)
-            node = identifier
-        elif isinstance(identifier, callable):
-            match node_callables.count(identifier):
-                case 0:
-                    err_msg = f"Callable {identifier} is not defined in this DAG's scope."
-                    raise ValueError(err_msg)
-                case 1:
-                    node = node_names[ node_callables.index(identifier) ]
-                case _:
-                    err_msg = f"Callable {identifier.__name__} " \
-                            + "exists more than once in this DAG. " \
-                            + "Use the unique identifier of the required node."
-                    raise ValueError(err_msg)
-        else:            
-            err_msg = f"Node {identifier} must be a string or a Python callable"
-            raise TypeError(err_msg)
-        
+        node = self._node_id(identifier)
         self.graph.nodes[node]['retry'] = count
 
     def skip_node(self, identifier: _T.Union[str,_T.Callable], skip: bool = True):
@@ -436,36 +462,18 @@ class DAG:
         """
         if not isinstance(skip, bool):
             raise ValueError("Skip argument must be a boolean value.")
-
-        node_names, node_callables = zip(*self.graph.nodes(data='callable'))
-
-        if isinstance(identifier, str):
-            if identifier not in node_names:
-                err_msg = f"Node {identifier} is not defined in this DAG's scope."
-                raise ValueError(err_msg)
-            node = identifier
-        elif isinstance(identifier, callable):
-            match node_callables.count(identifier):
-                case 0:
-                    err_msg = f"Callable {identifier} is not defined in this DAG's scope."
-                    raise ValueError(err_msg)
-                case 1:
-                    node = node_names[ node_callables.index(identifier) ]
-                case _:
-                    err_msg = f"Callable {identifier.__name__} " \
-                            + "exists more than once in this DAG. " \
-                            + "Use the unique identifier of the required node."
-                    raise ValueError(err_msg)
-        else:            
-            err_msg = f"Node {identifier} must be a string or a Python callable"
-            raise TypeError(err_msg)
-        
+        node = self._node_id(identifier)
         self.graph.nodes[node]['skip'] = skip
 
-    def __init__(self, graph: _nx.DiGraph = None) -> None:
+    def __init__(self, graph: _nx.DiGraph = None, **kwargs) -> None:
 
         if graph is None:
             self.graph = _nx.DiGraph()
+            return
+        
+        # Meant for internal use only, creating DAGs from subgraphs.
+        if kwargs.get('__force') == True:
+            self.graph = graph
             return
         
         _edges.validate_dag(graph)
