@@ -90,9 +90,9 @@ def generate_pyvis_network(graph: _nx.DiGraph) -> _Network:
         except:
             pass
 
-        node_title += f"<br>uuid:    {n.split('__')[-1]}"
-        node_title += f"<br>posargs: {', '.join(args)}" if args else ""
-        node_title += f"<br>kwargs:  {_json.dumps(kwargs)}" if kwargs else ""
+        node_title += f"\nuuid:    {n.split('__')[-1]}"
+        node_title += f"\nposargs: {', '.join(args)}" if args else ""
+        node_title += f"\nkwargs:  {_json.dumps(kwargs)}" if kwargs else ""
 
         network.add_node(
             n,
