@@ -81,11 +81,11 @@ class DAG:
 
         for arg in args:
             if isinstance(arg, _xcoms.Promise):
-                self.validate_promise(arg)
+                self._validate_promise(arg)
 
         for val in kwargs.values():
             if isinstance(val, _xcoms.Promise):
-                self.validate_promise(val)
+                self._validate_promise(val)
 
         self.graph.add_node(
             node_for_adding=node_name,
