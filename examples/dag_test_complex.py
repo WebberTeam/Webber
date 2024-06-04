@@ -1,5 +1,3 @@
-## DEPRECATED / NOT CURRENTLY SUPPORTED
-
 """
 A simple example of Webber's functionality --
 Compares overhead of synchronous exection in Webber with Python proper,
@@ -28,6 +26,11 @@ def print_and_wait(*values, sep=' ', end='\n', sleep_time: Union[int, float] = 0
     sleep(sleep_time)
 
 if __name__ == "__main__":
+
+    ## NOTE: DEPRECATED / NOT CURRENTLY SUPPORTED
+    msg = "Complex XComs deprecated, not currently supported."
+    raise NotImplementedError(msg)
+
     def adder_wrapper(vals_to_sum, context: Promise, store_var: str):
         context[store_var] = adder(vals_to_sum)
         context.upload()
