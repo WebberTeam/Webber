@@ -432,7 +432,8 @@ class DAG:
                                 if p not in failed:
                                     return False
                             case Condition.AnyCase:
-                                pass
+                                if p not in failed and p not in complete:
+                                    return False
                     return True
 
                 skip  = graph.nodes.data("skip", default=(False, False))
@@ -500,7 +501,7 @@ class DAG:
                                             )
                                             continue                                            
 
-                                        print(f"Event {event} exited with exception, skipping dependent events...")
+                                        print(f"Event {event} exited with exception...")
                                         failed.add(event)
                                         skipping = [
                                             e[1] for e in set(graph.out_edges(event)) 
