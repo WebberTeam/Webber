@@ -49,7 +49,7 @@ class _OutputLogger:
 
     def flush(self):
         """Ignores flushing of output, since logs are not concerned with such characters. (?)"""
-        pass # pylint: disable=unnecessary-pass
+        pass
 
     def __enter__(self):
         """Allows Python built-ins for printing to forward data in scope. (?)"""
@@ -102,7 +102,7 @@ class DAG:
             self, 
             u_of_edge: _T.Union[str,_T.Callable], v_of_edge: _T.Union[str,_T.Callable],
             continue_on: Condition = Condition.Success
-        ) -> _T.Tuple[str,str]: # pylint: disable=line-too-long,too-many-branches,too-many-statements
+        ) -> _T.Tuple[str,str]:
         """
         Adds an edge between nodes in the DAG's underlying graph,
         so long as the requested edge is unique and has not been added previously.
@@ -399,7 +399,7 @@ class DAG:
         graph = _nx.relabel_nodes(graph, lambda node: _edges.label_node(node))
         self.graph = _nx.DiGraph(graph)
 
-    class DAGExecutor: # pylint: disable=too-few-public-methods,too-many-locals
+    class DAGExecutor:
         """
         Base class used to execute DAG in embarrassingly parallel.
         """

@@ -7,19 +7,19 @@ from time import time, sleep
 from networkx import DiGraph
 from webber import DAG
 
-def first(): # pylint: disable=missing-function-docstring
+def first():
     print("1")
     sleep(1)
 
-def second(): # pylint: disable=missing-function-docstring
+def second():
     print("2")
     sleep(1)
 
-def third(): # pylint: disable=missing-function-docstring
+def third():
     print("3")
     sleep(1)
 
-def fourth(): # pylint: disable=missing-function-docstring
+def fourth():
     print("4")
     sleep(1)
 

@@ -12,9 +12,9 @@ import webber.xcoms as _xcoms
 import matplotlib.pyplot as _plt
 from webber.edges import Condition
 from pyvis.network import Network as _Network
-# from PyQt6.QtWidgets import QApplication as _QApplication              # pylint: disable=no-name-in-module
-# from PyQt6.QtWebEngineCore import QWebEnginePage as _QWebEnginePage    # pylint: disable=no-name-in-module
-# from PyQt6.QtWebEngineWidgets import QWebEngineView as _QWebEngineView # pylint: disable=no-name-in-module
+# from PyQt6.QtWidgets import QApplication as _QApplication
+# from PyQt6.QtWebEngineCore import QWebEnginePage as _QWebEnginePage
+# from PyQt6.QtWebEngineWidgets import QWebEngineView as _QWebEngineView
 
 from jinja2 import Environment as _Environment, FileSystemLoader as _FileSystemLoader
 
@@ -230,7 +230,7 @@ def visualize_browser(graph: _nx.DiGraph):
 
 #     gui_html = generate_vis_html(graph)
 
-#     class WebEngineView(_QWebEngineView): # pylint: disable=too-few-public-methods
+#     class WebEngineView(_QWebEngineView):
 #         """
 #         A small Qt-based WebEngineView to generate a GUI using embedded HTML and JavaScript.
 #         """

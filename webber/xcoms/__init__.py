@@ -23,7 +23,7 @@ class InvalidCallable(Exception):
         return "InvalidCallable"
 
 
-class Promise:                              # pylint: disable=too-few-public-methods
+class Promise:
     """A simple object class used to handle function intercoms for Webber's DAG executor."""
     key: str
     def __init__(self, _key: str) -> None:
