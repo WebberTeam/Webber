@@ -12,9 +12,9 @@ import webber.xcoms as _xcoms
 import matplotlib.pyplot as _plt
 from webber.edges import Condition
 from pyvis.network import Network as _Network
-# from PyQt6.QtWidgets import QApplication as _QApplication              # pylint: disable=no-name-in-module
-# from PyQt6.QtWebEngineCore import QWebEnginePage as _QWebEnginePage    # pylint: disable=no-name-in-module
-# from PyQt6.QtWebEngineWidgets import QWebEngineView as _QWebEngineView # pylint: disable=no-name-in-module
+# from PyQt6.QtWidgets import QApplication as _QApplication
+# from PyQt6.QtWebEngineCore import QWebEnginePage as _QWebEnginePage
+# from PyQt6.QtWebEngineWidgets import QWebEngineView as _QWebEngineView
 
 from jinja2 import Environment as _Environment, FileSystemLoader as _FileSystemLoader
 
@@ -27,6 +27,9 @@ edge_colors: dict[Condition, str] = {
 }
 
 def visualize_plt(graph: _nx.DiGraph) -> list[str]:
+    """
+    Generates basic network for visualization using NetworkX and Matplotlib intergration.
+    """
     for layer, nodes in enumerate(_nx.topological_generations(graph)):
         for node in nodes:
             graph.nodes[node]["layer"] = layer
@@ -41,7 +44,6 @@ def visualize_plt(graph: _nx.DiGraph) -> list[str]:
 def generate_pyvis_network(graph: _nx.DiGraph) -> _Network:
     """
     Generates basic network for visualization in Vis.js library.
-
     Depends on PyVis, Vis.js modules/libraries -- both are under legacy/minimal community support.
     """
     if len(graph.nodes()) == 0:
@@ -88,9 +90,9 @@ def generate_pyvis_network(graph: _nx.DiGraph) -> _Network:
         except:
             pass
 
-        node_title += f"<br>uuid:    {n.split('__')[-1]}"
-        node_title += f"<br>posargs: {', '.join(args)}" if args else ""
-        node_title += f"<br>kwargs:  {_json.dumps(kwargs)}" if kwargs else ""
+        node_title += f"\nuuid:    {n.split('__')[-1]}"
+        node_title += f"\nposargs: {', '.join(args)}" if args else ""
+        node_title += f"\nkwargs:  {_json.dumps(kwargs)}" if kwargs else ""
 
         network.add_node(
             n,
@@ -111,7 +113,6 @@ def generate_pyvis_network(graph: _nx.DiGraph) -> _Network:
 def generate_vis_js_script(graph: _nx.DiGraph) -> str:
     """
     Generates script for modeling Vis.js network graphs from a NetworkX DiGraph.
-
     Conformant to: Vis.js 4.20.1-SNAPSHOT
     """
     network: _Network = generate_pyvis_network(graph)
@@ -230,7 +231,7 @@ def visualize_browser(graph: _nx.DiGraph):
 
 #     gui_html = generate_vis_html(graph)
 
-#     class WebEngineView(_QWebEngineView): # pylint: disable=too-few-public-methods
+#     class WebEngineView(_QWebEngineView):
 #         """
 #         A small Qt-based WebEngineView to generate a GUI using embedded HTML and JavaScript.
 #         """

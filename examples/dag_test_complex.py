@@ -1,5 +1,3 @@
-## DEPRECATED / NOT CURRENTLY SUPPORTED
-
 """
 A simple example of Webber's functionality --
 Compares overhead of synchronous exection in Webber with Python proper,
@@ -10,12 +8,12 @@ from typing import List, Union
 from webber import DAG
 from webber.xcoms import Promise
 
-def adder(nums):       # pylint: disable=missing-function-docstring
+def adder(nums):
     total = sum(nums)
     print(total)
     return total
 
-def muxer(nums):       # pylint: disable=missing-function-docstring
+def muxer(nums):
     mux = 1
     num = None
     for num in nums:
@@ -23,16 +21,21 @@ def muxer(nums):       # pylint: disable=missing-function-docstring
     print(mux)
     return mux
 
-def print_and_wait(*values, sep=' ', end='\n', sleep_time: Union[int, float] = 0.0): # pylint: disable=missing-function-docstring
+def print_and_wait(*values, sep=' ', end='\n', sleep_time: Union[int, float] = 0.0):
     print(*values, sep=sep, end=end)
     sleep(sleep_time)
 
 if __name__ == "__main__":
-    def adder_wrapper(vals_to_sum, context: Promise, store_var: str):                # pylint: disable=missing-function-docstring
+
+    ## NOTE: DEPRECATED / NOT CURRENTLY SUPPORTED
+    msg = "Complex XComs deprecated, not currently supported."
+    raise NotImplementedError(msg)
+
+    def adder_wrapper(vals_to_sum, context: Promise, store_var: str):
         context[store_var] = adder(vals_to_sum)
         context.upload()
 
-    def muxer_wrapper(context_to_mux: List[str], context: Promise, store_var: str):  # pylint: disable=missing-function-docstring
+    def muxer_wrapper(context_to_mux: List[str], context: Promise, store_var: str):
         vals = [context[val] for val in context_to_mux]
         context[store_var] = muxer(vals)
         context.upload()

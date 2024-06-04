@@ -5,11 +5,11 @@ from time import time
 import webber
 from webber.xcoms import Promise
 
-def introduction(name):                         # pylint: disable=missing-function-docstring
+def introduction(name):
     print(f"My name is...{name}.")
     return name
 
-def greeting(name):                             # pylint: disable=missing-function-docstring
+def greeting(name):
     print(f"Hello, {name}!")
 
 if __name__ == "__main__":
