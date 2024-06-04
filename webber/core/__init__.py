@@ -264,14 +264,15 @@ class DAG:
         node = self._node_id(identifier)
         self.graph.nodes[node]['retry'] = count
 
-    def skip_node(self, identifier: _T.Union[str,_T.Callable], skip: bool = True):
+    def skip_node(self, identifier: _T.Union[str,_T.Callable], skip: bool = True, as_failure = False):
         """
-        Given a node identifier, set node to skip. (v0.1-alpha)
+        Given a node identifier, set DAG to skip node execution as a success (stdout print) or a failure (exception error).
+        Allows conditional control and testing over DAG's order of operations.
         """
         if not isinstance(skip, bool):
             raise ValueError("Skip argument must be a boolean value.")
         node = self._node_id(identifier)
-        self.graph.nodes[node]['skip'] = skip
+        self.graph.nodes[node]['skip'] = (skip, as_failure)
 
     @property
     def root(self) -> list[str]:
@@ -418,6 +419,9 @@ class DAG:
                 events = set(roots)
                 refs: dict[str, _futures.Future] = {}
 
+                def raise_exc(message):
+                    raise ValueError(message)
+
                 def run_conditions_met(n):
                     for p in graph.predecessors(n):
                         match graph.edges.get((p, n))['Condition']:
@@ -431,20 +435,21 @@ class DAG:
                                 pass
                     return True
 
-                skip  = graph.nodes.data("skip", default=False) 
+                skip  = graph.nodes.data("skip", default=(False, False))
                 retry = {n: [c+1, {}] for n,c in graph.nodes.data("retry", default=0)}
 
                 # Start execution of root node functions.
                 with _futures.ThreadPoolExecutor() as executor:
 
                     def Submit(event, callable, name, args, kwargs):
-                        if skip[event]:
+                        if skip[event][0]: # NOTE: Internally, DAGExecutor tracks these skipped events as successes or failures.
                             retry[event][0] = 0
+                            skip_callable = raise_exc if skip[event][1] else print
                             return executor.submit(
                                 _event_wrapper,
-                                _callable=print,
+                                _callable=skip_callable,
                                 _name=graph.nodes[event]['name'],
-                                _args=[f"Event {event} skipped. Continuing to dependencies..."],
+                                _args=[f"Event {event} skipped..."],
                                 _kwargs={}
                             )
                         else:
