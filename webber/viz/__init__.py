@@ -27,6 +27,9 @@ edge_colors: dict[Condition, str] = {
 }
 
 def visualize_plt(graph: _nx.DiGraph) -> list[str]:
+    """
+    Generates basic network for visualization using NetworkX and Matplotlib intergration.
+    """
     for layer, nodes in enumerate(_nx.topological_generations(graph)):
         for node in nodes:
             graph.nodes[node]["layer"] = layer
@@ -41,7 +44,6 @@ def visualize_plt(graph: _nx.DiGraph) -> list[str]:
 def generate_pyvis_network(graph: _nx.DiGraph) -> _Network:
     """
     Generates basic network for visualization in Vis.js library.
-
     Depends on PyVis, Vis.js modules/libraries -- both are under legacy/minimal community support.
     """
     if len(graph.nodes()) == 0:
@@ -111,7 +113,6 @@ def generate_pyvis_network(graph: _nx.DiGraph) -> _Network:
 def generate_vis_js_script(graph: _nx.DiGraph) -> str:
     """
     Generates script for modeling Vis.js network graphs from a NetworkX DiGraph.
-
     Conformant to: Vis.js 4.20.1-SNAPSHOT
     """
     network: _Network = generate_pyvis_network(graph)

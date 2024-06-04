@@ -21,7 +21,6 @@ __all__ = ["DAG", "Condition"]
 class _OutputLogger:
     """
     Basic logger for synchronizing parallel output of Webber tasks.
-
     Adapted from John Paton: https://johnpaton.net/posts/redirect-logging/
     """
     def __init__(self, name="root", level="INFO", callable_name="root", file=_sys.stdout) -> None:
@@ -72,7 +71,6 @@ class DAG:
     def add_node(self, node, *args, **kwargs) -> str:
         """
         Adds a callable with positional and keyword arguments to the DAG's underlying graph.
-
         On success, return unique identifier for the new node.
         """
         if not callable(node):
@@ -258,6 +256,8 @@ class DAG:
 
     def retry_node(self, identifier: _T.Union[str,_T.Callable], count: int):
         """
+        Given a node identifier, set number of automatic retries in case of failure.
+        Re-attempts will begin as soon as possible.
         """
         if not isinstance(count, int) and not count > 0:
             raise ValueError("Retry count must be a positive integer.")
@@ -266,6 +266,7 @@ class DAG:
 
     def skip_node(self, identifier: _T.Union[str,_T.Callable], skip: bool = True):
         """
+        Given a node identifier, set node to skip. (v0.1-alpha)
         """
         if not isinstance(skip, bool):
             raise ValueError("Skip argument must be a boolean value.")
@@ -273,8 +274,10 @@ class DAG:
         self.graph.nodes[node]['skip'] = skip
 
     @property
-    def root(self):
+    def root(self) -> list[str]:
         """
+        Return list of nodes with no dependencies.
+        Root nodes will occur first in DAG's order of operations.
         """
         return list(filter(
             lambda node: len(list(self.graph.predecessors(node))) < 1,
@@ -283,6 +286,8 @@ class DAG:
        
     def critical_path(self, nodes):
         """
+        Given a set of nodes, returns a subset of the DAG containing
+        only the node(s) and its parents, or upstream dependencies.
         """
         if isinstance(nodes, _abc.Iterable) and not isinstance(nodes, str):
             node_ids = {self._node_id(n) for n in nodes}
@@ -346,6 +351,10 @@ class DAG:
         return node
     
     def _subgraph(self, node_ids: set[str]):
+        """
+        Internal only. Given a set of nodes, returns a subset of the DAG containing
+        only the node(s) and upstream dependencies.
+        """
         parent_nodes = set()
         for node in node_ids:
             parent_nodes = parent_nodes.union(set(self.graph.predecessors(node)))
@@ -360,7 +369,6 @@ class DAG:
     def _validate_promise(self, promise: _xcoms.Promise) -> bool:
         """
         Returns True if a given Promise is valid, based on the DAG's current scope.
-
         Raises `webber.xcom.InvalidCallable` if Promise requests a callable that is out of scope.
         """
         if promise.key not in self.graph.nodes:
