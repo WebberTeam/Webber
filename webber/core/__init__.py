@@ -4,6 +4,7 @@ Base module for abstract multiprocessing system - a directed acyclic graph.
 import sys as _sys
 import typing as _T
 import uuid as _uuid
+import types as _types
 import logging as _logging
 import traceback as _traceback
 import contextlib as _contextlib
@@ -14,6 +15,7 @@ import webber.edges as _edges
 import webber.xcoms as _xcoms
 
 from webber.edges import Condition
+from webber.edges import dotdict
 
 __all__ = ["DAG", "Condition"]
 
@@ -280,6 +282,24 @@ class DAG:
         # for i, _id in enumerate(node_ids):
         #     node_data[i]['id'] = _id
         return node_data
+
+    def filter_nodes(self, filter = _types.LambdaType):
+        """
+        """
+        return [node for node in self.graph.nodes.values() if filter(dotdict(node))]
+    
+    def filter_edges(self, filter = _types.LambdaType):
+        """
+        """
+        raise NotImplementedError
+        edge_data = []
+        for e in list(self.graph.edges.data()):
+            edgedict = dotdict(e[2])
+            edgedict.update({'parent': e[0], 'child': e[1], 'id': e[:2]})
+            if filter(edgedict):
+                edge_data.append(edgedict)
+        return edge_data
+        # return [edgedict(e[:2], e[2]) for e in list(self.graph.edges.data()) if filter(edgedict(e[:2], e[2]))]
 
     def retry_node(self, identifier: _T.Union[str,_T.Callable], count: int):
         """
