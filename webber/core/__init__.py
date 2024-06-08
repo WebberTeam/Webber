@@ -283,23 +283,22 @@ class DAG:
         #     node_data[i]['id'] = _id
         return node_data
 
-    def filter_nodes(self, filter = _types.LambdaType):
+    def filter_nodes(self, filter: _types.LambdaType, data: bool = False):
         """
+        Given a lambda function, filter nodes in a DAG's scope based on its attributes.
         """
+        if not data:
+            return [node['id'] for node in self.graph.nodes.values() if filter(dotdict(node))]
         return [node for node in self.graph.nodes.values() if filter(dotdict(node))]
     
-    def filter_edges(self, filter = _types.LambdaType):
+    def filter_edges(self, filter = _types.LambdaType, data: bool = False):
         """
+        Given a lambda function, filter edges in a DAG's scope based on its attributes.
         """
-        raise NotImplementedError
-        edge_data = []
-        for e in list(self.graph.edges.data()):
-            edgedict = dotdict(e[2])
-            edgedict.update({'parent': e[0], 'child': e[1], 'id': e[:2]})
-            if filter(edgedict):
-                edge_data.append(edgedict)
-        return edge_data
-        # return [edgedict(e[:2], e[2]) for e in list(self.graph.edges.data()) if filter(edgedict(e[:2], e[2]))]
+        edgedict = lambda e: dotdict({'parent': e[0], 'child': e[1], 'id': e[:2], **e[2]})
+        if not data:
+            return [e[:2] for e in list(self.graph.edges.data()) if filter(edgedict(e))]
+        return [edgedict(e) for e in list(self.graph.edges.data()) if filter(edgedict(e))]
 
     def retry_node(self, identifier: _T.Union[str,_T.Callable], count: int):
         """
