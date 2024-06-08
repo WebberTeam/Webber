@@ -90,6 +90,7 @@ class DAG:
             node_for_adding=node_name,
             callable=node, args=args, kwargs=kwargs,
             name=node.__name__,
+            id=node_name
         )
 
         return node_name
@@ -272,18 +273,7 @@ class DAG:
             raise ValueError("Skip argument must be a boolean value.")
         node = self._node_id(identifier)
         self.graph.nodes[node]['skip'] = (skip, as_failure)
-
-    @property
-    def root(self) -> list[str]:
-        """
-        Return list of nodes with no dependencies.
-        Root nodes will occur first in DAG's order of operations.
-        """
-        return list(filter(
-            lambda node: len(list(self.graph.predecessors(node))) < 1,
-            self.graph.nodes.keys()
-        ))
-       
+      
     def critical_path(self, nodes):
         """
         Given a set of nodes, returns a subset of the DAG containing
@@ -322,6 +312,48 @@ class DAG:
             err_msg = "Unknown visualization type requested."
             raise NotImplementedError(err_msg)
     
+    @property
+    def root(self) -> list[str]:
+        """
+        Return list of nodes with no dependencies.
+        Root nodes will occur first in DAG's order of operations.
+        """
+        return list(filter(
+            lambda node: len(list(self.graph.predecessors(node))) < 1,
+            self.graph.nodes.keys()
+        ))
+
+    @property
+    def nodes(self):
+        return self.graph.nodes
+    
+    def get_nodes(self, *N):
+        """
+        Flexible function to retrieve DAG node data
+        """
+        if len(N) == 0:
+            node_data = list(self.graph.nodes.values())
+            # for i in range(len(node_data)):
+            #     _id = node_data[i][0]
+            #     node_data[i] = node_data[i][1]
+            #     node_data[i]['id'] = _id
+            return node_data
+
+        elif len(N) == 1:
+            if isinstance(N[0], _abc.Iterable) and not isinstance(N[0], str):
+                N = N[0]
+            else:
+                node_id = self._node_id(N[0])
+                node_data: dict = self.graph.nodes[node_id]
+                # node_data['id'] = node_id
+                return node_data
+        
+        node_ids  = [self._node_id(n) for n in N]
+        node_data = [self.graph.nodes[n] for n in node_ids]
+        # for i, _id in enumerate(node_ids):
+        #     node_data[i]['id'] = _id
+        return node_data
+
     def _node_id(self, identifier: _T.Union[str,_T.Callable]) -> str:
         """
         Meant for internal use only -- validate whether identifier given is a
@@ -406,6 +438,8 @@ class DAG:
                 graph.edges[e]['Condition'] = Condition.Success
             
         graph = _nx.relabel_nodes(graph, lambda node: _edges.label_node(node))
+        for n in graph.nodes:
+            graph.nodes[n]['id'] = n
         self.graph = _nx.DiGraph(graph)
 
     class DAGExecutor:
