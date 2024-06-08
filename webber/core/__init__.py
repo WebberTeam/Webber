@@ -254,6 +254,33 @@ class DAG:
         self.graph.add_edge(outgoing_node, incoming_node, Condition = continue_on)
         return (outgoing_node, incoming_node)
 
+    def get_nodes(self, *N):
+        """
+        Flexible function to retrieve DAG node data
+        """
+        if len(N) == 0:
+            node_data = list(self.graph.nodes.values())
+            # for i in range(len(node_data)):
+            #     _id = node_data[i][0]
+            #     node_data[i] = node_data[i][1]
+            #     node_data[i]['id'] = _id
+            return node_data
+
+        elif len(N) == 1:
+            if isinstance(N[0], _abc.Iterable) and not isinstance(N[0], str):
+                N = N[0]
+            else:
+                node_id = self._node_id(N[0])
+                node_data: dict = self.graph.nodes[node_id]
+                # node_data['id'] = node_id
+                return node_data
+        
+        node_ids  = [self._node_id(n) for n in N]
+        node_data = [self.graph.nodes[n] for n in node_ids]
+        # for i, _id in enumerate(node_ids):
+        #     node_data[i]['id'] = _id
+        return node_data
+
     def retry_node(self, identifier: _T.Union[str,_T.Callable], count: int):
         """
         Given a node identifier, set number of automatic retries in case of failure.
@@ -311,7 +338,7 @@ class DAG:
         else:
             err_msg = "Unknown visualization type requested."
             raise NotImplementedError(err_msg)
-    
+
     @property
     def root(self) -> list[str]:
         """
@@ -326,33 +353,6 @@ class DAG:
     @property
     def nodes(self):
         return self.graph.nodes
-    
-    def get_nodes(self, *N):
-        """
-        Flexible function to retrieve DAG node data
-        """
-        if len(N) == 0:
-            node_data = list(self.graph.nodes.values())
-            # for i in range(len(node_data)):
-            #     _id = node_data[i][0]
-            #     node_data[i] = node_data[i][1]
-            #     node_data[i]['id'] = _id
-            return node_data
-
-        elif len(N) == 1:
-            if isinstance(N[0], _abc.Iterable) and not isinstance(N[0], str):
-                N = N[0]
-            else:
-                node_id = self._node_id(N[0])
-                node_data: dict = self.graph.nodes[node_id]
-                # node_data['id'] = node_id
-                return node_data
-        
-        node_ids  = [self._node_id(n) for n in N]
-        node_data = [self.graph.nodes[n] for n in node_ids]
-        # for i, _id in enumerate(node_ids):
-        #     node_data[i]['id'] = _id
-        return node_data
 
     def _node_id(self, identifier: _T.Union[str,_T.Callable]) -> str:
         """
