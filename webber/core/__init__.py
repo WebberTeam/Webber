@@ -12,7 +12,6 @@ import concurrent.futures as _futures
 import networkx as _nx
 import webber.edges as _edges
 import webber.xcoms as _xcoms
-import webber.viz as _viz
 
 from webber.edges import Condition
 
@@ -303,11 +302,12 @@ class DAG:
         executor = self.DAGExecutor(self.graph, self.root, print_exc)
         return executor if return_ref else None
 
-
     def visualize(self, vis_type: _T.Literal['gui', 'browser', 'plt'] = 'browser'):
         """
         Basic wrapper to visualize DAG using Vis.js library.
+        By default, visualization library only loaded in after DAG.visualize() is called, halving import times.
         """
+        import webber.viz as _viz
         if vis_type == 'browser':
             _viz.visualize_browser(self.graph)
 
