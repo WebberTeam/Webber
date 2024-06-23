@@ -60,15 +60,16 @@ webber    </h1>
 </span><span id="L-2"><a href="#L-2"><span class="linenos"> 2</span></a><span class="sd">Webber: A Pythonic executor framework aimed at making parallel computing easy for everyone.</span>
 </span><span id="L-3"><a href="#L-3"><span class="linenos"> 3</span></a><span class="sd">&quot;&quot;&quot;</span>
 </span><span id="L-4"><a href="#L-4"><span class="linenos"> 4</span></a><span class="kn">import</span> <span class="nn">sys</span> <span class="k">as</span> <span class="nn">_sys</span>
-</span><span id="L-5"><a href="#L-5"><span class="linenos"> 5</span></a>
-</span><span id="L-6"><a href="#L-6"><span class="linenos"> 6</span></a><span class="n">__version__</span> <span class="o">=</span> <span class="s1">&#39;0.0.2&#39;</span>
-</span><span id="L-7"><a href="#L-7"><span class="linenos"> 7</span></a><span class="n">__supported__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;linux&quot;</span><span class="p">,</span> <span class="s2">&quot;linux2&quot;</span><span class="p">,</span> <span class="s2">&quot;win32&quot;</span><span class="p">)</span>
-</span><span id="L-8"><a href="#L-8"><span class="linenos"> 8</span></a>
-</span><span id="L-9"><a href="#L-9"><span class="linenos"> 9</span></a><span class="k">if</span> <span class="n">_sys</span><span class="o">.</span><span class="n">platform</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">__supported__</span><span class="p">:</span>
-</span><span id="L-10"><a href="#L-10"><span class="linenos">10</span></a>    <span class="n">err_msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Webber </span><span class="si">{</span><span class="n">__version__</span><span class="si">}</span><span class="s2"> is only supported on these platforms: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">__supported__</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
-</span><span id="L-11"><a href="#L-11"><span class="linenos">11</span></a>    <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="n">err_msg</span><span class="p">)</span>
+</span><span id="L-5"><a href="#L-5"><span class="linenos"> 5</span></a><span class="kn">import</span> <span class="nn">logging</span> <span class="k">as</span> <span class="nn">_logging</span>
+</span><span id="L-6"><a href="#L-6"><span class="linenos"> 6</span></a>
+</span><span id="L-7"><a href="#L-7"><span class="linenos"> 7</span></a><span class="n">__version__</span> <span class="o">=</span> <span class="s1">&#39;0.1.2&#39;</span>
+</span><span id="L-8"><a href="#L-8"><span class="linenos"> 8</span></a><span class="n">__supported__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;linux&quot;</span><span class="p">,</span> <span class="s2">&quot;linux2&quot;</span><span class="p">,</span> <span class="s2">&quot;win32&quot;</span><span class="p">)</span>
+</span><span id="L-9"><a href="#L-9"><span class="linenos"> 9</span></a>
+</span><span id="L-10"><a href="#L-10"><span class="linenos">10</span></a><span class="k">if</span> <span class="n">_sys</span><span class="o">.</span><span class="n">platform</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">__supported__</span><span class="p">:</span>
+</span><span id="L-11"><a href="#L-11"><span class="linenos">11</span></a>    <span class="n">_logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Webber </span><span class="si">{</span><span class="n">__version__</span><span class="si">}</span><span class="s2"> is only supported on these platforms: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">__supported__</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="L-12"><a href="#L-12"><span class="linenos">12</span></a>
 </span><span id="L-13"><a href="#L-13"><span class="linenos">13</span></a><span class="kn">from</span> <span class="nn">.core</span> <span class="kn">import</span> <span class="n">DAG</span><span class="p">,</span> <span class="n">Condition</span>
+</span><span id="L-14"><a href="#L-14"><span class="linenos">14</span></a><span class="kn">from</span> <span class="nn">.xcoms</span> <span class="kn">import</span> <span class="n">Promise</span>
 </span></pre></div>
 
 
