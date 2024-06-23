@@ -338,25 +338,33 @@ class DAG:
         executor = self.DAGExecutor(self.graph, self.root, print_exc)
         return executor if return_ref else None
 
-    def visualize(self, vis_type: _T.Literal['gui', 'browser', 'plt'] = 'browser'):
+    def visualize(self, type: _T.Literal['gui', 'browser', 'plt'] = None):
         """
-        Basic wrapper to visualize DAG using Vis.js library.
+        Basic wrapper to visualize DAG using Vis.js and NetGraph libraries.
         By default, visualization library only loaded in after DAG.visualize() is called, halving import times.
         """
         import webber.viz as _viz
-        if vis_type == 'browser':
-            _viz.visualize_browser(self.graph)
 
-        elif vis_type == 'plt':
-            _viz.visualize_plt(self.graph)
+        match type:
+            case 'browser':
+                _viz.visualize_browser(self.graph)
 
-        elif vis_type == 'gui':
-            # _visualize_gui(self.graph)
-            raise NotImplementedError
+            case 'plt':
+                return _viz.visualize_plt(self.graph)
 
-        else:
-            err_msg = "Unknown visualization type requested."
-            raise NotImplementedError(err_msg)
+            case 'gui':
+                # _visualize_gui(self.graph)
+                raise NotImplementedError
+
+            case None: 
+                if _viz._in_notebook():
+                    return _viz.visualize_plt(self.graph)
+                else:
+                    _viz.visualize_browser(self.graph)
+
+            case _:
+                err_msg = "Unknown visualization type requested."
+                raise NotImplementedError(err_msg)
 
     @property
     def root(self) -> list[str]:
