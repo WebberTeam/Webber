@@ -265,16 +265,15 @@ class DAG:
         if len(N) == 0 and filter == None:
             raise ValueError("Either an array of node IDs or node data (N) or a filter must be passed to this function.")
 
-        elif len(N) == 1:
-            if isinstance(N[0], _abc.Iterable) and not isinstance(N[0], str):
-                N = N[0]
+        elif isinstance(N, dict) or isinstance(N, str):
+            N = [N]
 
         if filter != None:
             node_ids = self.filter_nodes(filter, data = False)
         else:
-            try:
+            if isinstance(N[0], dict):
                 ids = [n['id'] for n in N]
-            except TypeError:
+            else:
                 ids = N
             node_ids = [self._node_id(i) for i in ids]
         
@@ -478,27 +477,34 @@ class DAG:
             nodedict['id'] = id
         
         expected_keys = ('callable', 'args', 'kwargs', 'name', 'id')
-        if not set(nodedict.keys()).issuperset(set(expected_keys)):
+        if not set(expected_keys).issuperset(set(nodedict.keys())):
             raise ValueError(f"Expecting keys: {expected_keys}")
         
         if not force:
-            if not _iscallable(nodedict['callable']):
+            if nodedict.get('callable') and not _iscallable(nodedict['callable']):
                 err_msg = f"Requested node is not assigned a callable Python function."
                 raise TypeError(err_msg)
                 
-            if not (isinstance(nodedict['args'], _abc.Iterable) and not isinstance(nodedict['args'], str)):
-                err_msg = f"Requested node is not assigned a tuple of pos args."
-                raise TypeError(err_msg)
-                
-            if not isinstance(nodedict['kwargs'], dict):
-                err_msg = f"Requested node is not assigned a dictionary of kw args."
-                raise TypeError(err_msg)
+            if nodedict.get('args'):
+                if not (isinstance(nodedict['args'], _abc.Iterable) or isinstance(nodedict['args'], str)):
+                    err_msg = f"Requested node is not assigned a tuple of pos args."
+                    raise TypeError(err_msg)
+                elif not isinstance(nodedict['args'], tuple):
+                    nodedict['args'] = tuple(nodedict['args'])
             
-            assert(nodedict['name'] == nodedict['callable'].__name__)
+            if nodedict.get('kwargs') and not isinstance(nodedict['kwargs'], dict):
+                    err_msg = f"Requested node is not assigned a dictionary of kw args."
+                    raise TypeError(err_msg)
             
+            if nodedict.get('name'):
+                if nodedict.get('callable'):
+                    assert(nodedict['name'] == nodedict['callable'].__name__)
+                else:
+                    assert(self.graph.nodes[nodedict['id']]['name'] == nodedict['name'])
+                    
             nodedict['args'] = tuple(nodedict['args'])
         
-        self.graph.nodes[nodedict['id']] = nodedict
+        self.graph.nodes[nodedict['id']].update(nodedict)
 
 
     def _subgraph(self, node_ids: set[str]):
