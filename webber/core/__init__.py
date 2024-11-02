@@ -19,6 +19,9 @@ from webber.edges import dotdict
 
 __all__ = ["DAG", "Condition"]
 
+def _iscallable(function: any):
+    return callable(function)
+
 class _OutputLogger:
     """
     Basic logger for synchronizing parallel output of Webber tasks.
@@ -74,7 +77,7 @@ class DAG:
         Adds a callable with positional and keyword arguments to the DAG's underlying graph.
         On success, return unique identifier for the new node.
         """
-        if not callable(node):
+        if not _iscallable(node):
             err_msg = f"{node}: requested node is not a callable Python function."
             raise TypeError(err_msg)
 
@@ -111,10 +114,10 @@ class DAG:
         """
 
         # Ensure both nodes are either callable or in string format.
-        if not (isinstance(u_of_edge,str) or callable(u_of_edge)):
+        if not (isinstance(u_of_edge,str) or _iscallable(u_of_edge)):
             err_msg = f"Outgoing node {u_of_edge} must be a string or a Python callable"
             raise TypeError(err_msg)
-        if not (isinstance(v_of_edge,str) or callable(v_of_edge)):
+        if not (isinstance(v_of_edge,str) or _iscallable(v_of_edge)):
             err_msg = f"Outgoing node {v_of_edge} must be a string or a Python callable"
             raise TypeError(err_msg)
 
@@ -124,10 +127,10 @@ class DAG:
         # Ensure that both nodes are callables, then add both to the graph and
         # assign the outgoing node as a root.
         if len(self.graph.nodes()) == 0:
-            if not callable(u_of_edge):
+            if not _iscallable(u_of_edge):
                 err_msg = f"Outgoing node {u_of_edge} is not defined in this DAG's scope."
                 raise ValueError(err_msg)
-            if not callable(v_of_edge):
+            if not _iscallable(v_of_edge):
                 err_msg = f"Incoming node {v_of_edge} is not defined in this DAG's scope."
                 raise ValueError(err_msg)
             outgoing_node = self.add_node(u_of_edge)
@@ -138,7 +141,7 @@ class DAG:
         node_names, node_callables = zip(*self.graph.nodes(data='callable'))
         graph_edges = list(self.graph.edges(data=False))
 
-        if callable(u_of_edge) and callable(v_of_edge):
+        if _iscallable(u_of_edge) and _iscallable(v_of_edge):
 
             # Base Case 1: Both nodes are callable and are not present in the DAG:
             # Add both nodes to the DAG and assign the outgoing node as a root.
@@ -181,7 +184,7 @@ class DAG:
 
             # Otherwise, one of the nodes is a callable, and the other is a valid unique identifier.
             else:
-                if callable(u_of_edge):
+                if _iscallable(u_of_edge):
 
                     # Error Case 4: The requested callable exists more than once in the DAG.
                     if node_callables.count(u_of_edge) > 1:
@@ -256,6 +259,58 @@ class DAG:
         self.graph.add_edge(outgoing_node, incoming_node, Condition = continue_on)
         return (outgoing_node, incoming_node)
 
+    def update_nodes(self, *N, filter: _types.LambdaType = None, data = None, callable = None, args = None, kwargs = None):
+        """
+        """
+        if len(N) == 0 and filter == None:
+            raise ValueError("Either an array of node IDs or node data (N) or a filter must be passed to this function.")
+
+        elif len(N) == 1:
+            if isinstance(N[0], _abc.Iterable) and not isinstance(N[0], str):
+                N = N[0]
+
+        if filter != None:
+            node_ids = self.filter_nodes(filter, data = False)
+        else:
+            try:
+                ids = [n['id'] for n in N]
+            except TypeError:
+                ids = N
+            node_ids = [self._node_id(i) for i in ids]
+        
+        std_update = (callable == None) and (args == None) and (kwargs == None)
+
+        if std_update:
+            for node_id, n in zip(node_ids, N):
+                if data != None:
+                    self._update_node(data, id = node_id)
+                else:
+                    self._update_node(n, id = node_id)
+        
+        else:
+            if callable != None:
+                if not _iscallable(callable):
+                    err_msg = f"Requested node is not assigned a callable Python function."
+                    raise TypeError(err_msg)
+                for node_id in node_ids:
+                    self.graph.nodes[node_id]['callable'] = callable
+                    self.graph.nodes[node_id]['name'] = callable.__name__
+            
+            if args != None:
+                if not (isinstance(args, _abc.Iterable) and not isinstance(args, str)):
+                    err_msg = f"Requested node is not assigned a tuple of pos args."
+                    raise TypeError(err_msg)
+                args = tuple(args)
+                for node_id in node_ids:
+                    self.graph.nodes[node_id]['args'] = args
+            
+            if kwargs != None:
+                if not isinstance(kwargs, dict):
+                    err_msg = f"Requested node is not assigned a dictionary of kw args."
+                    raise TypeError(err_msg)
+                for node_id in node_ids:
+                    self.graph.nodes[node_id]['kwargs'] = kwargs
+
     def get_nodes(self, *N):
         """
         Flexible function to retrieve DAG node data
@@ -266,19 +321,19 @@ class DAG:
             #     _id = node_data[i][0]
             #     node_data[i] = node_data[i][1]
             #     node_data[i]['id'] = _id
-            return node_data
+            return [dotdict(d) for d in node_data]
 
         elif len(N) == 1:
             if isinstance(N[0], _abc.Iterable) and not isinstance(N[0], str):
                 N = N[0]
             else:
                 node_id = self._node_id(N[0])
-                node_data: dict = self.graph.nodes[node_id]
+                node_data = dotdict(self.graph.nodes[node_id])
                 # node_data['id'] = node_id
                 return node_data
         
         node_ids  = [self._node_id(n) for n in N]
-        node_data = [self.graph.nodes[n] for n in node_ids]
+        node_data = [dotdict(self.graph.nodes[n]) for n in node_ids]
         # for i, _id in enumerate(node_ids):
         #     node_data[i]['id'] = _id
         return node_data
@@ -289,7 +344,7 @@ class DAG:
         """
         if not data:
             return [node['id'] for node in self.graph.nodes.values() if filter(dotdict(node))]
-        return [node for node in self.graph.nodes.values() if filter(dotdict(node))]
+        return [dotdict(node) for node in self.graph.nodes.values() if filter(dotdict(node))]
     
     def filter_edges(self, filter = _types.LambdaType, data: bool = False):
         """
@@ -393,7 +448,7 @@ class DAG:
                 err_msg = f"Node {identifier} is not defined in this DAG's scope."
                 raise ValueError(err_msg)
             node = identifier
-        elif callable(identifier):
+        elif _iscallable(identifier):
             match node_callables.count(identifier):
                 case 0:
                     err_msg = f"Callable {identifier} is not defined in this DAG's scope."
@@ -410,6 +465,42 @@ class DAG:
             raise TypeError(err_msg)
         return node
     
+    def _update_node(self, nodedict: dict, id: str = None, force: bool = False):
+        """
+        """
+        if id != None:
+            try:
+                if nodedict.get('id') != None and id != nodedict['id']:
+                    raise ValueError(f"Given ID {id} inconsistent with dictionary identifier: {nodedict['id']}")
+            except ValueError as e:
+                if not force:
+                    raise e
+            nodedict['id'] = id
+        
+        expected_keys = ('callable', 'args', 'kwargs', 'name', 'id')
+        if not set(nodedict.keys()).issuperset(set(expected_keys)):
+            raise ValueError(f"Expecting keys: {expected_keys}")
+        
+        if not force:
+            if not _iscallable(nodedict['callable']):
+                err_msg = f"Requested node is not assigned a callable Python function."
+                raise TypeError(err_msg)
+                
+            if not (isinstance(nodedict['args'], _abc.Iterable) and not isinstance(nodedict['args'], str)):
+                err_msg = f"Requested node is not assigned a tuple of pos args."
+                raise TypeError(err_msg)
+                
+            if not isinstance(nodedict['kwargs'], dict):
+                err_msg = f"Requested node is not assigned a dictionary of kw args."
+                raise TypeError(err_msg)
+            
+            assert(nodedict['name'] == nodedict['callable'].__name__)
+            
+            nodedict['args'] = tuple(nodedict['args'])
+        
+        self.graph.nodes[nodedict['id']] = nodedict
+
+
     def _subgraph(self, node_ids: set[str]):
         """
         Internal only. Given a set of nodes, returns a subset of the DAG containing
