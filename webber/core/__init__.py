@@ -481,9 +481,16 @@ class DAG:
             raise ValueError(f"Expecting keys: {expected_keys}")
         
         if not force:
-            if nodedict.get('callable') and not _iscallable(nodedict['callable']):
-                err_msg = f"Requested node is not assigned a callable Python function."
-                raise TypeError(err_msg)
+            if nodedict.get('callable'):
+                if _iscallable(nodedict['callable']):
+                    err_msg = f"Requested node is not assigned a callable Python function."
+                    raise TypeError(err_msg)
+                if nodedict.get('name'):
+                    assert(nodedict['name'] == nodedict['callable'].__name__)
+                else:
+                    nodedict['name'] = nodedict['callable'].__name__
+            elif nodedict.get('name'):
+                assert(self.graph.nodes[nodedict['id']]['name'] == nodedict['name'])
                 
             if nodedict.get('args'):
                 if not (isinstance(nodedict['args'], _abc.Iterable) or isinstance(nodedict['args'], str)):
@@ -495,12 +502,6 @@ class DAG:
             if nodedict.get('kwargs') and not isinstance(nodedict['kwargs'], dict):
                     err_msg = f"Requested node is not assigned a dictionary of kw args."
                     raise TypeError(err_msg)
-            
-            if nodedict.get('name'):
-                if nodedict.get('callable'):
-                    assert(nodedict['name'] == nodedict['callable'].__name__)
-                else:
-                    assert(self.graph.nodes[nodedict['id']]['name'] == nodedict['name'])
                     
             nodedict['args'] = tuple(nodedict['args'])
         
