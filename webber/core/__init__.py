@@ -268,6 +268,15 @@ class DAG:
         elif isinstance(N, dict) or isinstance(N, str):
             N = [N]
 
+        elif len(N) == 1 and isinstance(N[0], _abc.Iterable):
+            if isinstance(N[0][0], dict):
+                N = N[0]
+            elif isinstance(N[0][0], str):
+                # BUG: A list of all single character IDs will fail to be updated. Please try another call method (i.e.: nested iterator).
+                if sum(list(map(lambda n: len(n), N[0]))) != len(N[0]): 
+                    N = N[0]
+
+
         if filter != None:
             node_ids = self.filter_nodes(filter, data = False)
         else:
