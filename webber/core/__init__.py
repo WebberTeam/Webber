@@ -485,28 +485,28 @@ class DAG:
                 if _iscallable(nodedict['callable']):
                     err_msg = f"Requested node is not assigned a callable Python function."
                     raise TypeError(err_msg)
-                if nodedict.get('name'):
-                    assert(nodedict['name'] == nodedict['callable'].__name__)
-                else:
+                if not nodedict.get('name'):
                     nodedict['name'] = nodedict['callable'].__name__
-            elif nodedict.get('name'):
-                assert(self.graph.nodes[nodedict['id']]['name'] == nodedict['name'])
-                
+
+            if nodedict.get('name') and (not isinstance(nodedict['name'], str) or len(nodedict['name']) == 0): 
+                err_msg = f"Requested node name must be a non-null Python string, will default to callable when not set."
+                raise TypeError(err_msg)
+
             if nodedict.get('args'):
                 if not (isinstance(nodedict['args'], _abc.Iterable) or isinstance(nodedict['args'], str)):
                     err_msg = f"Requested node is not assigned a tuple of pos args."
                     raise TypeError(err_msg)
-                elif not isinstance(nodedict['args'], tuple):
-                    nodedict['args'] = tuple(nodedict['args'])
+                nodedict['args'] = tuple(nodedict['args'])
             
             if nodedict.get('kwargs') and not isinstance(nodedict['kwargs'], dict):
-                    err_msg = f"Requested node is not assigned a dictionary of kw args."
-                    raise TypeError(err_msg)
-                    
-            nodedict['args'] = tuple(nodedict['args'])
+                err_msg = f"Requested node is not assigned a dictionary of kw args."
+                raise TypeError(err_msg)                    
         
         self.graph.nodes[nodedict['id']].update(nodedict)
 
+        # Reset node name if implicitly requested.
+        if not nodedict.get('name'):
+            self.graph.nodes[nodedict['id']]['name'] = self.graph.nodes[nodedict['id']]['callable'].__name__
 
     def _subgraph(self, node_ids: set[str]):
         """
