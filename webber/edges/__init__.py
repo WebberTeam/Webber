@@ -15,10 +15,14 @@ class Condition(_enum.IntEnum):
     AnyCase = 3
 
 class dotdict(dict):
-        """dot.notation access to dictionary attributes"""
-        __getattr__ = dict.get
-        __setattr__ = dict.__setitem__
-        __delattr__ = dict.__delitem__
+    """dot.notation access to dictionary attributes"""
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
+
+class edgedict():
+    def __init__(E):
+        return dotdict({'parent': E[0], 'child': E[1], 'id': E[:2], **E[2]})
 
 def continue_on_failure(edge: dict) -> bool:
     """Check edge condition for whether to continue on parent node's failure."""

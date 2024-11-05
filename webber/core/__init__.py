@@ -14,8 +14,7 @@ import networkx as _nx
 import webber.edges as _edges
 import webber.xcoms as _xcoms
 
-from webber.edges import Condition
-from webber.edges import dotdict
+from webber.edges import Condition, dotdict, edgedict
 
 __all__ = ["DAG", "Condition"]
 
@@ -319,37 +318,39 @@ class DAG:
                 for node_id in node_ids:
                     self.graph.nodes[node_id]['kwargs'] = kwargs
 
-    def get_edges(self, *N) -> list[dotdict]:
+    def get_edges(self, *N, data: bool = True) -> _T.Union[list[edgedict], list[tuple]]:
         """
         Retrieval function for DAG edge data, based on tuple identifiers.
         Use filter_edges for more flexible controls (e.g.: filter_edges(in=['node_1', 'node_2']))
         """
         if len(N) == 0:
-            edge_data = list(self.graph.edges.values())
-            return [dotdict(d) for d in edge_data]
-        
-        elif len(N) == 1:
-            if not isinstance(N, tuple):
-                N = N[0]
+            if data == True:
+                return list(map(edgedict, self.graph.edges.data()))
+            return list(self.graph.edges.data(data=False))
+            
+        # elif len(N) == 1:
+        #     if isinstance(N[0], _abc.Iterable) and not isinstance(N[0], tuple):
+        #         N = N[0]
 
         if len(N) != len(set(N)) or False in map(lambda n: isinstance(n, tuple) and len(n) == 2):
             err_msg = 'All requested edges must be unique tuples of size 2.'
             raise ValueError(err_msg)
     
         edge_data = [self.get_edge(o, i) for (o, i) in N]
-
         return edge_data
     
-    def get_edge(self, outgoing_node: str, incoming_node: str) -> dotdict:
+    def get_edge(self, outgoing_node: _T.Union[str, callable], incoming_node: _T.Union[str, callable], data: bool = True) -> _T.Union[edgedict, tuple]:
         """
         Retrieval function for a single directed edge between nodes in a given DAG. 
         """
         id = (self._node_id(outgoing_node), self._node_id(incoming_node))
+        if not data:
+            return id
         edge_data = self.graph.get_edge_data(u = id[0], v = id[1])
         if not edge_data:
-            err_msg = f'No directed edge found for the requested: ({id[0]}, {id[1]})'
+            err_msg = f'No match found for the directed edge requested: {id}'
             raise ValueError(err_msg)
-        return dotdict(edge_data)
+        return edgedict((*id, *edge_data))
 
     def get_nodes(self, *N) -> list[dotdict]:
         """
@@ -386,6 +387,8 @@ class DAG:
     def filter_nodes(self, filter: _types.LambdaType, data: bool = False):
         """
         Given a lambda function, filter nodes in a DAG's scope based on its attributes.
+        Current limitation: Filters must use node identifier strings when referencing nodes.
+        Use get_nodes for more flexible controls.
         """
         if not data:
             return [node['id'] for node in self.graph.nodes.values() if filter(dotdict(node))]
@@ -394,8 +397,9 @@ class DAG:
     def filter_edges(self, filter = _types.LambdaType, data: bool = False):
         """
         Given a lambda function, filter edges in a DAG's scope based on its attributes.
+        Current limitation: Filters must use node identifier strings when referencing nodes.
+        Use get_edges for more flexible controls.
         """
-        edgedict = lambda e: dotdict({'parent': e[0], 'child': e[1], 'id': e[:2], **e[2]})
         if not data:
             return [e[:2] for e in list(self.graph.edges.data()) if filter(edgedict(e))]
         return [edgedict(e) for e in list(self.graph.edges.data()) if filter(edgedict(e))]
