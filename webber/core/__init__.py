@@ -319,9 +319,42 @@ class DAG:
                 for node_id in node_ids:
                     self.graph.nodes[node_id]['kwargs'] = kwargs
 
-    def get_nodes(self, *N):
+    def get_edges(self, *N) -> list[dotdict]:
         """
-        Flexible function to retrieve DAG node data
+        Retrieval function for DAG edge data, based on tuple identifiers.
+        Use filter_edges for more flexible controls (e.g.: filter_edges(in=['node_1', 'node_2']))
+        """
+        if len(N) == 0:
+            edge_data = list(self.graph.edges.values())
+            return [dotdict(d) for d in edge_data]
+        
+        elif len(N) == 1:
+            if not isinstance(N, tuple):
+                N = N[0]
+
+        if len(N) != len(set(N)) or False in map(lambda n: isinstance(n, tuple) and len(n) == 2):
+            err_msg = 'All requested edges must be unique tuples of size 2.'
+            raise ValueError(err_msg)
+    
+        edge_data = [self.get_edge(o, i) for (o, i) in N]
+
+        return edge_data
+    
+    def get_edge(self, outgoing_node: str, incoming_node: str) -> dotdict:
+        """
+        Retrieval function for a single directed edge between nodes in a given DAG. 
+        """
+        id = (self._node_id(outgoing_node), self._node_id(incoming_node))
+        edge_data = self.graph.get_edge_data(u = id[0], v = id[1])
+        if not edge_data:
+            err_msg = f'No directed edge found for the requested: ({id[0]}, {id[1]})'
+            raise ValueError(err_msg)
+        return dotdict(edge_data)
+
+    def get_nodes(self, *N) -> list[dotdict]:
+        """
+        Flexible function to retrieve DAG node data, based on node identifiers 
+        (e.g.: string IDs or unique callables).
         """
         if len(N) == 0:
             node_data = list(self.graph.nodes.values())
@@ -339,6 +372,10 @@ class DAG:
                 node_data = dotdict(self.graph.nodes[node_id])
                 # node_data['id'] = node_id
                 return node_data
+            
+        if not len(N) == len(set(N)):
+            err_msg = 'All requested nodes must be unique identifiers.'
+            raise ValueError(err_msg)
         
         node_ids  = [self._node_id(n) for n in N]
         node_data = [dotdict(self.graph.nodes[n]) for n in node_ids]
