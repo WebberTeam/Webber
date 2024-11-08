@@ -258,6 +258,91 @@ class DAG:
         self.graph.add_edge(outgoing_node, incoming_node, Condition = continue_on)
         return (outgoing_node, incoming_node)
 
+    def update_edges(self, *E, continue_on: Condition, filter: _types.LambdaType = None, data = None):
+        """
+        """
+        if len(E) == 0 and filter == None:
+            raise ValueError("Either an array of edge IDs / edgedicts (E) or a filter must be passed to this function.")
+
+        elif isinstance(E, dict) or isinstance(E, edgedict):
+            E = [E]
+
+        elif len(E) == 1 and isinstance(E[0], _abc.Iterable):
+            try:
+                _ = self.get_edges(E[0])
+            except:
+                E = E[0]
+
+        if filter != None:
+            edge_ids = self.filter_edges(filter, data = False)
+        else:
+            if isinstance(E[0], dict) or isinstance(E[0], edgedict):
+                try:
+                    ids = [e['id'] for e in E]
+                except KeyError:
+                    err_msg = 'In dictionary form, all given edges must be follow edgedict standards.'
+                    raise ValueError(err_msg)
+            else:
+                ids = E
+            edge_ids = [self.get_edge(i[0], i[1], data=False) for i in ids]
+
+        std_update = (continue_on == None)
+
+        if std_update:
+            for edge_id, e in zip(edge_ids, E):
+                if data != None:
+                    self._update_edge(data, id = edge_id)
+                else:
+                    self._update_edge(e, id = edge_id)
+        
+        else:
+            if continue_on != None:
+                if not isinstance(continue_on, Condition):
+                    err_msg = f"Condition assignment must use webber.edges.Condition"
+                    raise TypeError(err_msg)
+                for e in edge_ids:
+                    self.graph.edges[e]['Condition'] = continue_on
+
+    def _update_edge(self, edgedict: dict, id: tuple[str, str] = None, force: bool = False):
+        if id != None:
+            try:
+                if edgedict.get('id') and id != edgedict['id']:
+                    raise ValueError(f"Given ID {id} inconsistent with dictionary identifier: {edgedict['id']}")
+            except ValueError as e:
+                if not force:
+                    raise e
+            edgedict['id'] = id
+
+        expected_keys = ('parent', 'child', 'id', 'continue_on')
+        if not set(expected_keys).issuperset(set(edgedict.keys())):
+            raise ValueError(f"Expecting keys: {expected_keys}")
+
+        if not force:
+            
+            e1, e2 = None, None
+
+            if edgedict.get('id'):
+                e1 = self.get_edge(edgedict['id'], data = False)
+
+            if edgedict.get('parent') or edgedict.get('child'):
+                e2 = self.get_edge(edgedict.get('parent'), edgedict.get('child'), data = False)
+            else:
+                e2 = e1
+
+            if e1 != e2:
+                raise ValueError('Edge vertices should not be changed using update functions.')
+            
+            elif e1 == None:
+                raise ValueError('Requested edge was not given an identifier.')
+
+            if edgedict.get('continue_on') and not isinstance(edgedict['continue_on'], Condition):
+                err_msg = f"Condition assignment must use webber.edges.Condition"
+                raise TypeError(err_msg)
+                       
+        edge_id = edgedict.pop('id')
+        edge = {k: v for k,v in edgedict.items() if k not in ('parent', 'child', 'id')}
+        self.graph.edges[edge_id[0]][edge_id[1]].update(edge)
+
     def update_nodes(self, *N, filter: _types.LambdaType = None, data = None, callable = None, args = None, kwargs = None):
         """
         """
@@ -332,11 +417,11 @@ class DAG:
         #     if isinstance(N[0], _abc.Iterable) and not isinstance(N[0], tuple):
         #         N = N[0]
 
-        if len(N) != len(set(N)) or False in map(lambda n: isinstance(n, tuple) and len(n) == 2):
+        if len(N) != len(set(N)) or False in map(lambda n: isinstance(n, _abc.Iterable) and len(n) == 2, N):
             err_msg = 'All requested edges must be unique tuples of size 2.'
             raise ValueError(err_msg)
     
-        edge_data = [self.get_edge(o, i) for (o, i) in N]
+        edge_data = [self.get_edge(o, i, data=data) for (o, i) in N]
         return edge_data
     
     def get_edge(self, outgoing_node: _T.Union[str, callable], incoming_node: _T.Union[str, callable], data: bool = True) -> _T.Union[edgedict, tuple]:
@@ -350,7 +435,7 @@ class DAG:
         if not edge_data:
             err_msg = f'No match found for the directed edge requested: {id}'
             raise ValueError(err_msg)
-        return edgedict((*id, *edge_data))
+        return edgedict(*id, **edge_data)
 
     def get_nodes(self, *N) -> list[dotdict]:
         """
@@ -394,7 +479,7 @@ class DAG:
             return [node['id'] for node in self.graph.nodes.values() if filter(dotdict(node))]
         return [dotdict(node) for node in self.graph.nodes.values() if filter(dotdict(node))]
     
-    def filter_edges(self, filter = _types.LambdaType, data: bool = False):
+    def filter_edges(self, filter = _types.LambdaType, data: bool = False) -> list[edgedict]:
         """
         Given a lambda function, filter edges in a DAG's scope based on its attributes.
         Current limitation: Filters must use node identifier strings when referencing nodes.
@@ -552,11 +637,12 @@ class DAG:
                 err_msg = f"Requested node is not assigned a dictionary of kw args."
                 raise TypeError(err_msg)                    
         
-        self.graph.nodes[nodedict['id']].update(nodedict)
+        node_id = nodedict.pop('id')
+        self.graph.nodes[node_id].update(nodedict)
 
         # Reset node name if implicitly requested.
         if not nodedict.get('name'):
-            self.graph.nodes[nodedict['id']]['name'] = self.graph.nodes[nodedict['id']]['callable'].__name__
+            self.graph.nodes[node_id]['name'] = self.graph.nodes[node_id]['callable'].__name__
 
     def _subgraph(self, node_ids: set[str]):
         """
