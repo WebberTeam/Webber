@@ -439,7 +439,7 @@ class DAG:
     
     def get_edge(self, outgoing_node: _T.Union[str, callable], incoming_node: _T.Union[str, callable], data: bool = True) -> _T.Union[edgedict, tuple]:
         """
-        Retrieval function for a single directed edge between nodes in a given DAG. 
+        Retrieval function for a single directed edge between nodes in a DAG's scope. 
         """
         id = (self.node_id(outgoing_node), self.node_id(incoming_node))
         if not data:
@@ -449,6 +449,14 @@ class DAG:
             err_msg = f'No match found for the directed edge requested: {id}'
             raise ValueError(err_msg)
         return edgedict(*id, **edge_data)
+
+    def get_node(self, n: _T.Union[str, callable]) -> dotdict:
+        """
+        Given a unique identifier, returns a dictionary of node metadata
+        for a single node in the DAG's scope.
+        """
+        node_id = self.node_id(n)
+        return dotdict(self.graph.nodes[node_id])
 
     def get_nodes(self, *N) -> list[dotdict]:
         """
