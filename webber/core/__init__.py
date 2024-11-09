@@ -258,6 +258,19 @@ class DAG:
         self.graph.add_edge(outgoing_node, incoming_node, Condition = continue_on)
         return (outgoing_node, incoming_node)
 
+    def remove_edge(self, u_of_edge: _T.Union[str,_T.Callable], v_of_edge: _T.Union[str,_T.Callable]) -> _T.Tuple[str,str]:
+        """
+        Removes an directed edge between nodes in the DAG's underlying graph.
+        Throws error if the edge does not exist.s
+        On success, returns Tuple of the removed edge's unique identifiers.
+        """
+        edge_id = (self._node_id(u_of_edge), self._node_id(v_of_edge))
+        if edge_id not in self.graph.edges(data = False):
+            err_msg = "Requested edge does not exist in the DAG's scope"
+            raise ValueError(err_msg)
+        self.graph.remove_edge(edge_id[0], edge_id[1])
+        return edge_id
+
     def update_edges(self, *E, continue_on: Condition, filter: _types.LambdaType = None, data = None):
         """
         """
@@ -341,7 +354,7 @@ class DAG:
                        
         edge_id = edgedict.pop('id')
         edge = {k: v for k,v in edgedict.items() if k not in ('parent', 'child', 'id')}
-        self.graph.edges[edge_id[0]][edge_id[1]].update(edge)
+        self.graph.edges[(edge_id[0], edge_id[1])].update(edge)
 
     def update_nodes(self, *N, filter: _types.LambdaType = None, data = None, callable = None, args = None, kwargs = None):
         """
