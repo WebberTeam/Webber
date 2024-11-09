@@ -588,8 +588,8 @@ class DAG:
         ))
 
     @property
-    def nodes(self):
-        return self.graph.nodes
+    def nodes(self) -> list[str]:
+        return list(self.graph.nodes)
 
     def node_id(self, identifier: _T.Union[str,_T.Callable]) -> str:
         """
