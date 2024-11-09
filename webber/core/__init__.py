@@ -268,7 +268,7 @@ class DAG:
     def remove_edge(self, u_of_edge: _T.Union[str,_T.Callable], v_of_edge: _T.Union[str,_T.Callable]) -> _T.Tuple[str,str]:
         """
         Removes an directed edge between nodes in the DAG's underlying graph.
-        Throws error if the edge does not exist.s
+        Throws error if the edge does not exist.
         On success, returns Tuple of the removed edge's unique identifiers.
         """
         edge_id = (self.node_id(u_of_edge), self.node_id(v_of_edge))
