@@ -264,7 +264,7 @@ class DAG:
         Throws error if the edge does not exist.s
         On success, returns Tuple of the removed edge's unique identifiers.
         """
-        edge_id = (self._node_id(u_of_edge), self._node_id(v_of_edge))
+        edge_id = (self.node_id(u_of_edge), self.node_id(v_of_edge))
         if edge_id not in self.graph.edges(data = False):
             err_msg = "Requested edge does not exist in the DAG's scope"
             raise ValueError(err_msg)
@@ -381,7 +381,7 @@ class DAG:
                 ids = [n['id'] for n in N]
             else:
                 ids = N
-            node_ids = [self._node_id(i) for i in ids]
+            node_ids = [self.node_id(i) for i in ids]
         
         std_update = (callable == None) and (args == None) and (kwargs == None)
 
@@ -441,7 +441,7 @@ class DAG:
         """
         Retrieval function for a single directed edge between nodes in a given DAG. 
         """
-        id = (self._node_id(outgoing_node), self._node_id(incoming_node))
+        id = (self.node_id(outgoing_node), self.node_id(incoming_node))
         if not data:
             return id
         edge_data = self.graph.get_edge_data(u = id[0], v = id[1])
@@ -467,7 +467,7 @@ class DAG:
             if isinstance(N[0], _abc.Iterable) and not isinstance(N[0], str):
                 N = N[0]
             else:
-                node_id = self._node_id(N[0])
+                node_id = self.node_id(N[0])
                 node_data = dotdict(self.graph.nodes[node_id])
                 # node_data['id'] = node_id
                 return node_data
@@ -476,7 +476,7 @@ class DAG:
             err_msg = 'All requested nodes must be unique identifiers.'
             raise ValueError(err_msg)
         
-        node_ids  = [self._node_id(n) for n in N]
+        node_ids  = [self.node_id(n) for n in N]
         node_data = [dotdict(self.graph.nodes[n]) for n in node_ids]
         # for i, _id in enumerate(node_ids):
         #     node_data[i]['id'] = _id
@@ -509,7 +509,7 @@ class DAG:
         """
         if not isinstance(count, int) and not count > 0:
             raise ValueError("Retry count must be a positive integer.")
-        node = self._node_id(identifier)
+        node = self.node_id(identifier)
         self.graph.nodes[node]['retry'] = count
 
     def skip_node(self, identifier: _T.Union[str,_T.Callable], skip: bool = True, as_failure = False):
@@ -519,7 +519,7 @@ class DAG:
         """
         if not isinstance(skip, bool):
             raise ValueError("Skip argument must be a boolean value.")
-        node = self._node_id(identifier)
+        node = self.node_id(identifier)
         self.graph.nodes[node]['skip'] = (skip, as_failure)
       
     def critical_path(self, nodes):
@@ -528,9 +528,9 @@ class DAG:
         only the node(s) and its parents, or upstream dependencies.
         """
         if isinstance(nodes, _abc.Iterable) and not isinstance(nodes, str):
-            node_ids = {self._node_id(n) for n in nodes}
+            node_ids = {self.node_id(n) for n in nodes}
         else:
-            node_ids = {self._node_id(nodes)}
+            node_ids = {self.node_id(nodes)}
         return self._subgraph(node_ids)
 
     def execute(self, return_ref=False, print_exc=False):
@@ -583,10 +583,11 @@ class DAG:
     def nodes(self):
         return self.graph.nodes
 
-    def _node_id(self, identifier: _T.Union[str,_T.Callable]) -> str:
+    def node_id(self, identifier: _T.Union[str,_T.Callable]) -> str:
         """
-        Meant for internal use only -- validate whether identifier given is a
-        valid node within the DAG's scope.
+        Validate whether identifier given is a valid node within the DAG's scope.
+        Primarily for internal use, but useful for retrieving string identifiers
+        for a unique callable in a DAG.
         """
         node_names, node_callables = zip(*self.graph.nodes(data='callable'))
 
