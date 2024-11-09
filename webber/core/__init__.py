@@ -257,6 +257,13 @@ class DAG:
         # Then we can add the new edge and re-evaluate the roots in our graph.
         self.graph.add_edge(outgoing_node, incoming_node, Condition = continue_on)
         return (outgoing_node, incoming_node)
+    
+    def remove_node(self, *posargs, **kwargs) -> None:
+        """
+        Currently out-of-scope. Node-removal can lead to unexpected behavior in a DAG.
+        Throws error message and recommends safer methods.
+        """
+        raise NotImplementedError("Node removals can lead to unexpected behavior in a DAG without special care. Please consider using the skip_node operation or define a new DAG to achieve the same effect.")
 
     def remove_edge(self, u_of_edge: _T.Union[str,_T.Callable], v_of_edge: _T.Union[str,_T.Callable]) -> _T.Tuple[str,str]:
         """
