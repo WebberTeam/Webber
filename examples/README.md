@@ -1,6 +1,6 @@
 # Where Should I Start?
 
-## New to Python
+## New to Python?
 
 #### This module assumes that you are comfortable using Python as a programming language and have at least some exposure to dynamic programming.
 
@@ -13,21 +13,25 @@ For those with basic exposure to Python, please reference [Python 3's official d
 - [Functional Programming](https://docs.python.org/3/howto/functional.html)
 - [Data Structures](https://docs.python.org/3/tutorial/datastructures.html)
 
-## Required Reading
+## Starting with Webber
 
-#### For all developers, we *strongly* recommend a few introductory readings on Directed Acyclic Graphs (DAGs) and dynamic programming:
+For all developers, we ***strongly*** recommend a few introductory readings on Directed Acyclic Graphs (DAGs) and dynamic programming:
+
 - [James Davis explains DAGs in 180 seconds (YouTube)](https://www.youtube.com/watch?v=Y4hlrkidWQo)
 - [Dynamic Programming from *Algorithms*, by Dasgupta, Papadimitriou, and Vazirani](https://people.eecs.berkeley.edu/~vazirani/algorithms/chap6.pdf)
   - [The full text is available for review here.](http://algorithmics.lsi.upc.edu/docs/Dasgupta-Papadimitriou-Vazirani.pdf)
 
-## Starting with Webber
+Then, make sure you've installed the latest stable release of Webber and its dependencies:
+```
+python -m pip install webber
+```
 
-Once you've installed Webber and its dependencies, we recommend going through the following Jupyter notebooks in an interactive development environment (IDE) of your choice:
+Once Webber is installed, we recommend going through the following Jupyter notebooks in an interactive development environment (IDE) of your choice:
 1. [Introduction to Webber](./webber-intro.ipynb)
 2. [Using Promises in Webber](./more-dag-tests.ipynb)
 3. [Conditional Execution and Skips in Webber](./skip-dags.ipynb)
 
-From there, you can reference the other examples in this repository for your development. 
+From there, you can reference the other examples in this repository for your specific use-case and experimentation. 
 
 Some of our favorites examples:
 - [XComs in Webber](./dag_xcoms.py)
