@@ -5,13 +5,16 @@ Last updated by: Jan 22, 2024 (v0.0.2)
 """
 import sys as _sys
 import json as _json
+import types as _types
 import os.path as _path
+import typing as _typing
 import flask as _flask
 import networkx as _nx
 import webber.xcoms as _xcoms
 import matplotlib.pyplot as _plt
 from webber.edges import Condition
 from pyvis.network import Network as _Network
+from netgraph import InteractiveGraph as _IGraph
 # from PyQt6.QtWidgets import QApplication as _QApplication
 # from PyQt6.QtWebEngineCore import QWebEnginePage as _QWebEnginePage
 # from PyQt6.QtWebEngineWidgets import QWebEngineView as _QWebEngineView
@@ -21,25 +24,96 @@ from jinja2 import Environment as _Environment, FileSystemLoader as _FileSystemL
 __all__ = ["generate_pyvis_network", "visualize_plt", "visualize_browser"]
 
 edge_colors: dict[Condition, str] = {
-    Condition.Success: 'blue',
-    Condition.AnyCase: 'green',
+    Condition.Success: 'grey',
+    Condition.AnyCase: 'blue',
     Condition.Failure: 'red'
 }
 
-def visualize_plt(graph: _nx.DiGraph) -> list[str]:
+def edge_color(c: Condition):
     """
-    Generates basic network for visualization using NetworkX and Matplotlib intergration.
+    Given a Webber Condition, return corresponding color for edge visualizations. 
     """
-    for layer, nodes in enumerate(_nx.topological_generations(graph)):
-        for node in nodes:
-            graph.nodes[node]["layer"] = layer
-    graph = _nx.relabel_nodes(graph, lambda node: graph.nodes[node]["name"])
-    pos = _nx.multipartite_layout(graph, subset_key="layer")
-    fig, ax = _plt.subplots()
-    _nx.draw_networkx(graph, pos=pos, ax=ax)
-    ax.set_title("DAG layout in topological order")
-    fig.tight_layout()
-    _plt.show()
+    return edge_colors[c]
+
+def node_color(c: _typing.Callable):
+    """
+    Given a callable, return a color that to be used in visualizations
+    mapping to the callable's type (lambda, function, built-in, class).
+    """
+    _class = str(c.__class__).strip("<class '").rstrip("'>")
+    match _class:
+        case 'type':
+            return '#71C6B1'
+        case 'function':
+            return '#679AD1' if isinstance(c, _types.LambdaType) else '#DCDCAF'
+        case 'builtin_function_or_method':
+            return '#DCDCAF'
+    return '#AADAFB'
+
+def get_layers(graph: _nx.DiGraph) -> list[list[str]]:
+    """
+    Generates ordered list of node identifiers given a directed network graph.
+    """
+    layers = []
+    for nodes in _nx.topological_generations(graph):
+        layers.append(nodes)
+    return layers
+
+def annotate_node(node: dict):
+    """
+    Given a Webber node, construct an annotation to be used in graph visualizations.
+    """
+    args, kwargs = [], {}
+    for a in node['args']:
+        try:
+            args.append(_json.dumps(a))
+        except:
+            if isinstance(a, _xcoms.Promise):
+                args.append(f'Promise({a.key.split('__')[0]})')
+            else:
+                args.append(f'Object({str(a.__class__)})')
+    for k,v in node['kwargs'].items():
+        try:
+            _json.dumps(k)
+            try:
+                kwargs[_json.dumps(k)] = _json.dumps(v)
+            except:
+                if isinstance(v, _xcoms.Promise):
+                    kwargs[k] = f"Promise('{v.key.split('__')[0]}')"
+                else:
+                    kwargs[k] = f'Object({str(v.__class__)})'
+        except:
+            pass
+    node_title  = f"{node['name']}:"
+
+    try:
+        node_title += f" {node['callable'].__doc__.split('\n')[0]}"
+    except:
+        pass
+
+    node_title += f"\nuuid:    {node['id'].split('__')[-1]}"
+    node_title += f"\nposargs: {', '.join(args)}" if args else ""
+    node_title += f"\nkwargs:  {_json.dumps(kwargs)}" if kwargs else ""
+
+    return node_title
+
+def visualize_plt(graph: _nx.DiGraph, interactive=True) -> _IGraph:
+    """
+    Generates basic network for visualization using the NetGraph library.
+    """
+    if _in_notebook() and interactive:
+        _plt.ion()
+        _plt.close()
+    return _IGraph(
+        graph, arrows=True, node_shape='o', node_size=5,
+        node_layout='multipartite',
+        node_layout_kwargs=dict(layers=get_layers(graph), reduce_edge_crossings=True),
+        node_labels={id: c.__name__ for id,c in graph.nodes.data(data='callable')},
+        node_color={id: node_color(c) for id,c in graph.nodes.data(data='callable')},
+        edge_color={e[:-1]: edge_color(e[-1]) for e in graph.edges.data(data='Condition')},
+        annotations={id: annotate_node(n) for id,n in graph.nodes.data(data=True)},
+        annotation_fontdict=dict(horizontalalignment='left')
+    )
 
 def generate_pyvis_network(graph: _nx.DiGraph) -> _Network:
     """
@@ -61,51 +135,19 @@ def generate_pyvis_network(graph: _nx.DiGraph) -> _Network:
 
     for n in graph.nodes:
         node = graph.nodes[n]
-        args, kwargs = [], {}
-        for a in node['args']:
-            try:
-                args.append(_json.dumps(a))
-            except:
-                if isinstance(a, _xcoms.Promise):
-                    args.append(f'Promise({a.key})')
-                else:
-                    args.append(f'Object({str(a.__class__)})')
-        for k,v in node['kwargs'].items():
-            try:
-                _json.dumps(k)
-                try:
-                    kwargs[_json.dumps(k)] = _json.dumps(v)
-                except:
-                    if isinstance(v, _xcoms.Promise):
-                        kwargs[k] = f"Promise('{v.key.split('__')[0]}')"
-                    else:
-                        kwargs[k] = f'Object({str(v.__class__)})'
-            except:
-                pass
-        
-        node_title  = f"{node['name']}:"
-
-        try:
-            node_title += f" {node['callable'].__doc__}"
-        except:
-            pass
-
-        node_title += f"\nuuid:    {n.split('__')[-1]}"
-        node_title += f"\nposargs: {', '.join(args)}" if args else ""
-        node_title += f"\nkwargs:  {_json.dumps(kwargs)}" if kwargs else ""
-
         network.add_node(
             n,
             label=node['name'],
-            shape='circle' if len(graph) < 4 else 'box',
-            title= node_title,
+            shape='box',
+            title= annotate_node(node),
             labelHighlightBold=True,
+            color=node_color(node['callable']),
             level=node_generation(n)
         )
 
     for source_edge, dest_edge in graph.edges:
         condition: Condition = graph.edges.get((source_edge, dest_edge))['Condition']
-        network.add_edge(source_edge, dest_edge, color=edge_colors[condition])
+        network.add_edge(source_edge, dest_edge, color=edge_color(condition))
     
     return network
 
@@ -220,6 +262,20 @@ def visualize_browser(graph: _nx.DiGraph):
 
     print('\nVisualization closed.')
 
+def _in_notebook() -> bool:
+    """
+    Internal only. Helper to default to interactive notebooks when available
+    if visualization type is not specified.
+    """
+    try:
+        from IPython import get_ipython
+        if 'IPKernelApp' not in get_ipython().config:
+            return False
+    except ImportError:
+        return False
+    except AttributeError:
+        return False
+    return True
 
 # def visualize_gui(graph: _nx.DiGraph):
 #     """
