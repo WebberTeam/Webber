@@ -38,12 +38,18 @@ At scale, this can be extremely useful for expediting data processes, and enable
 
 ## Where Should I Start?
 
-#### You can install Webber and its dependencies from a Python environment like so:
+**You can install Webber and its dependencies from a Python environment like so:**
 ```
 python -m pip install webber
 ```
 
-#### From there, we recommend referencing our [Examples directory](./examples/) for background readings, code examples, and introductory Jupyter Notebooks.
+**From there, we recommend referencing our [Examples directory](./examples/) for background readings, code examples, and introductory Jupyter Notebooks.**
+
+**Up-to-date function-level documentation is available at [our PDocs site](https://webberteam.github.io/Webber/webber.html).**
+- [webber.core documentation (DAG)](https://webberteam.github.io/Webber/webber/core.html)
+- [webber.xcoms (Promise)](https://webberteam.github.io/Webber/webber/xcoms.html)
+- [webber.edges (Condition, dotdict, edgedict)](https://webberteam.github.io/Webber/webber/edges.html)
+- [webber.viz](https://webberteam.github.io/Webber/webber/viz.html) -- Internal visualization library, see: [`DAG.visualize()`](https://webberteam.github.io/Webber/webber/core.html#DAG.visualize)
 
 ## When Should I Use Webber?
 
