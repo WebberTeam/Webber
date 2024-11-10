@@ -27,16 +27,16 @@ python -m pip install webber
 ```
 
 Once Webber is installed, we recommend going through the following Jupyter notebooks in an interactive development environment (IDE) of your choice:
-1. [Introduction to Webber](./webber-intro.ipynb)
-2. [Using Promises in Webber](./more-dag-tests.ipynb)
-3. [Conditional Execution and Skips in Webber](./skip-dags.ipynb)
+1. [Introduction to Webber](./notebooks/webber-intro.ipynb)
+2. [Using Promises in Webber](./notebooks/more-dag-tests.ipynb)
+3. [Conditional Execution and Skips in Webber](./notebooks/skip-dags.ipynb)
 
 From there, you can reference the other examples in this repository for your specific use-case and experimentation. 
 
 Some of our favorites examples:
-- [XComs in Webber](./dag_xcoms.py)
-- [Complex Use of Promises in Webber](./dag_complex.py)
-- [Node Getters in Webber](./dag_complex.py)
+- [XComs in Webber](./code/dag_xcoms.py)
+- [Complex Use of Promises in Webber](./code/dag_complex.py)
+- [Node Getters in Webber](./code/dag_get_nodes.py)
 
 2024.10.11: We're still building this section out. We are actively accepting feedback and help in writing documentation and testing edge cases.
 
