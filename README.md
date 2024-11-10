@@ -36,6 +36,15 @@ Webber is explicitly designed with edge computing and prototyping use-cases in m
 
 At scale, this can be extremely useful for expediting data processes, and enables real-time, optimized execution of Python scripts for data wrangling and model training without convoluted code or expensive resources.
 
+## Where Should I Start?
+
+#### You can install Webber and its dependencies from a Python environment like so:
+```
+python -m pip install webber
+```
+
+#### From there, we recommend referencing our [Examples directory](./examples/) for background readings, code examples, and introductory Jupyter Notebooks.
+
 ## When Should I Use Webber?
 
 The overarching use case is: "*I have a Pythonic workflow that needs to be executed in parallel, and I cannot afford large overheads in storage or latency.*"
@@ -66,10 +75,17 @@ This project has seen some major improvements since its inception. In 2024, we'v
 - **Critical Node Paths:** Critical Node Paths: DAGs can be reduced to a set of specified nodes and their dependencies. Capability still under development. See: `DAG.critical_path(n)`
 
 ## Project Roadmap:
-See our latest releases for an overview of what this module supports. Our next release(s) are expected to cover the following:
+#### See our latest releases for an overview of what this module supports. Our next release(s) are expected to cover the following:
 
-*Coming in Version 0.1.2:*
+#### *Added in Version 0.1.2:*
 - Get/Update Functions for Nodes and Edges
 - Introductory Jupyter notebooks and documentation
 - Expanded support for Jupyter Notebook visualizations
 - Edge and Node filtering with Lambda Functions (e.g.: `lambda e: e.Condition == condition.OnSuccess`).
+
+#### *Future Roadmap*:
+- Bug fixes and expanded documentation
+- Visualization module improvements for browsers
+- Expanded support for data science use-cases
+- Executor efficiency improvements (e.g.: covered node paths)
+- Successor and predecessor functions
