@@ -522,8 +522,8 @@ class DAG:
         Given a node identifier, set number of automatic retries in case of failure.
         Re-attempts will begin as soon as possible.
         """
-        if not isinstance(count, int) and not count > 0:
-            raise ValueError("Retry count must be a positive integer.")
+        if not isinstance(count, int) or not count >= 0:
+            raise ValueError("Retry count must be a non-negative integer.")
         node = self.node_id(identifier)
         self.graph.nodes[node]['retry'] = count
 
