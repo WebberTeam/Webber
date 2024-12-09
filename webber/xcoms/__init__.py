@@ -8,6 +8,8 @@ Last Updated: pre-0.0.1
 """
 __all__ = ["InvalidCallable", "Promise"]
 
+import typing as _T
+
 class InvalidCallable(Exception):
     """Requested Webber Promise is invalid in DAG's given scope/context."""
     def __init__(self, *args):
@@ -25,10 +27,10 @@ class InvalidCallable(Exception):
 
 class Promise:
     """A simple object class used to handle function intercoms for Webber's DAG executor."""
-    key: str
+    key: _T.Union[str, _T.Callable]
     def __init__(self, _key: str) -> None:
         """Initializing Promise using a function ID string (`webber.DAG.add_node`)."""
-        if not isinstance(_key, str):
-            err_msg = "Keys must be strings given by `webber.DAG.add_node`."
+        if not isinstance(_key, _T.Callable) or isinstance(_key, str):
+            err_msg = "Keys must be string IDs or callables to be assigned to a Webber Promise"
             raise TypeError(err_msg)
         self.key = _key
