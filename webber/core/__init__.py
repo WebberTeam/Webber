@@ -82,9 +82,10 @@ class DAG:
 
         node_name = _edges.label_node(node)
 
-        for i in len(args):
-            if isinstance(args[i], _xcoms.Promise):
-                args[i] = self.resolve_promise(args[i])
+        args = tuple([
+            arg if not isinstance(args, _xcoms.Promise) else self.resolve_promise(arg)
+            for arg in args
+        ])
 
         for k, val in kwargs.items():
             if isinstance(val, _xcoms.Promise):
