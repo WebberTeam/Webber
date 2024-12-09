@@ -82,13 +82,14 @@ class DAG:
 
         node_name = _edges.label_node(node)
 
-        for arg in args:
-            if isinstance(arg, _xcoms.Promise):
-                self._validate_promise(arg)
+        args = tuple([
+            arg if not isinstance(args, _xcoms.Promise) else self.resolve_promise(arg)
+            for arg in args
+        ])
 
-        for val in kwargs.values():
+        for k, val in kwargs.items():
             if isinstance(val, _xcoms.Promise):
-                self._validate_promise(val)
+                kwargs[k] = self.resolve_promise(val)
 
         self.graph.add_node(
             node_for_adding=node_name,
@@ -689,15 +690,16 @@ class DAG:
         subgraph = self.graph.subgraph(node_ids)
         return DAG(subgraph, __force=True)
 
-    def _validate_promise(self, promise: _xcoms.Promise) -> bool:
+    def resolve_promise(self, promise: _xcoms.Promise) -> _xcoms.Promise:
         """
-        Returns True if a given Promise is valid, based on the DAG's current scope.
+        Returns a Promise with a unique string identifier, if a given Promise is valid, based on the DAG's current scope.
         Raises `webber.xcom.InvalidCallable` if Promise requests a callable that is out of scope.
         """
-        if promise.key not in self.graph.nodes:
-            err_msg = f"Requested callable {promise.key} is not defined in DAG's scope."
-            raise _xcoms.InvalidCallable(err_msg)
-        return True
+        try:
+            key = self.node_id(promise.key)
+        except Exception as e:
+            raise _xcoms.InvalidCallable(e)
+        return _xcoms.Promise(key)
 
     def __init__(self, graph: _nx.DiGraph = None, **kwargs) -> None:
 
