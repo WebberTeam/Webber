@@ -2,31 +2,31 @@
 Experimenting with multiprocessing queues.
 Hopeful that this will become an extension of the DAG class.
 """
-import multiprocessing as mp
 import uuid as _uuid
-from webber.xcoms import Promise
-import concurrent.futures as _futures
-from webber.core import DAG, _OutputLogger, _event_wrapper
-from typing import Callable
-from queue import LifoQueue
+import typing as _T
+import queue as _q
+import itertools as _it
 import traceback as _traceback
-from itertools import pairwise
+import concurrent.futures as _futures
 
-def worker(work: Callable, args, kwargs: dict, promises: dict = {}, print_exc = False,
-           parent_id: str = None, parent_process: _futures.Future = None, in_queue: mp.Queue = None,
-           halt_condition: Callable = None, iter_limit: int = None, out_queue: mp.Queue = None):
+import webber.core as _core
+import webber.xcoms as _xcoms
+
+def worker(work: _T.Callable, args, kwargs: dict, promises: dict = {}, print_exc = False,
+           parent_id: str = None, parent_process: _futures.Future = None, in_queue: _q.LifoQueue = None,
+           halt_condition: _T.Callable = None, iter_limit: int = None, out_queue: _q.LifoQueue = None):
 
     try:
         
         args = list(args)
 
         for i in range(len(args)):
-            if isinstance(args[i], Promise):
+            if isinstance(args[i], _xcoms.Promise):
                 if args[i].key in promises.keys():
                     args[i] = promises[args[i].key]
         
         for k, v in kwargs.items():
-            if isinstance(v, Promise):
+            if isinstance(v, _xcoms.Promise):
                 if v.key in promises.keys():
                     kwargs[k] = promises[v.key]
 
@@ -47,12 +47,12 @@ def worker(work: Callable, args, kwargs: dict, promises: dict = {}, print_exc = 
                     continue
                     
                 for a in range(len(args)):
-                    if isinstance(args[a], Promise):
+                    if isinstance(args[a], _xcoms.Promise):
                         if args[a].key == parent_id:
                             args[a] = output
                 
                 for k, v in kwargs.items():
-                    if isinstance(v, Promise):
+                    if isinstance(v, _xcoms.Promise):
                         if v.key == parent_id:
                             kwargs[k] = output
 
@@ -73,7 +73,7 @@ def worker(work: Callable, args, kwargs: dict, promises: dict = {}, print_exc = 
         print('Exception during runtime, ending process...')
         raise e
 
-class QueueDAG(DAG):
+class QueueDAG(_core.DAG):
 
     conditions = {}
 
@@ -114,14 +114,14 @@ class QueueDAG(DAG):
         processes = {}
         join = set()
         
-        promises: dict = { k: v for k, v in pairwise(promises) } if len(promises) > 0 else {}
+        promises: dict = { k: v for k, v in _it.pairwise(promises) } if len(promises) > 0 else {}
 
-        with _OutputLogger(str(_uuid.uuid4()), "INFO", "root") as _:
+        with _core._OutputLogger(str(_uuid.uuid4()), "INFO", "root") as _:
             with _futures.ThreadPoolExecutor() as executor:
 
                 for id in self.root:
                     node = self.get_node(id)
-                    queues[id] = LifoQueue()
+                    queues[id] = _q.LifoQueue()
                     node.update({
                         'callable': worker,
                         'args': tuple(),
@@ -136,7 +136,7 @@ class QueueDAG(DAG):
                         }
                     })
                     processes[id] = executor.submit(
-                        _event_wrapper,
+                        _core._event_wrapper,
                         _callable=node['callable'],
                         _name=node['name'],
                         _args=node['args'],
@@ -145,7 +145,7 @@ class QueueDAG(DAG):
                 
                 for parent_id, id in self.graph.edges:
                     node = self.get_node(id)
-                    queues[id] = LifoQueue()
+                    queues[id] = _q.LifoQueue()
                     if len(list(self.graph.successors(id))) == 0:
                         endproc = id
                     node.update({
@@ -163,7 +163,7 @@ class QueueDAG(DAG):
                         }
                     })
                     processes[id] = executor.submit(
-                        _event_wrapper,
+                        _core._event_wrapper,
                         _callable=node['callable'],
                         _name=node['name'],
                         _args=node['args'],
