@@ -1,4 +1,4 @@
-import webber.etl as etl
+import webber.queue as queue
 import time
 from webber import Promise
 
@@ -8,7 +8,7 @@ def writer(x):
     fd.close()
 
 
-dag = etl.AsyncDAG()
+dag = queue.AsyncDAG()
 x = dag.add_node(lambda: "1", iterator=100)
 y = dag.add_node(writer, Promise(x))
 dag.add_edge(x, y)
