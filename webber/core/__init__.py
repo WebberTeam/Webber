@@ -70,7 +70,6 @@ class DAG:
     """
     Directed Acyclic Graph used to represent Pythonic tasks in parallel.
     """
-
     def add_node(self, node, *args, **kwargs) -> str:
         """
         Adds a callable with positional and keyword arguments to the DAG's underlying graph.

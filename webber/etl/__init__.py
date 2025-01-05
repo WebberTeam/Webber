@@ -10,16 +10,29 @@ from webber.core import DAG, _OutputLogger, _event_wrapper
 from typing import Callable
 from queue import LifoQueue
 import traceback as _traceback
-
+from itertools import pairwise
 
 def worker(work: Callable, args, kwargs: dict, promises: dict = {}, print_exc = False,
            parent_id: str = None, parent_process: _futures.Future = None, in_queue: mp.Queue = None,
            halt_condition: Callable = None, iter_limit: int = None, out_queue: mp.Queue = None):
 
     try:
-        i = 0
+        
         args = list(args)
-        while iter_limit == None or i < iter_limit:
+
+        for i in range(len(args)):
+            if isinstance(args[i], Promise):
+                if args[i].key in promises.keys():
+                    args[i] = promises[args[i].key]
+        
+        for k, v in kwargs.items():
+            if isinstance(v, Promise):
+                if v.key in promises.keys():
+                    kwargs[k] = promises[v.key]
+
+        iter_count = 0
+
+        while iter_limit == None or (iter_count < iter_limit):
             
             # For child processes, get latest value from the queue.
             # If none are available and parent process is complete, break.
@@ -32,24 +45,28 @@ def worker(work: Callable, args, kwargs: dict, promises: dict = {}, print_exc = 
                     elif parent_process.done():
                         break
                     continue
-                for i in range(len(args)):
-                    if isinstance(args[i], Promise):
-                        args[i] = output if args[i].key == parent_id else promises[v.key]
+                    
+                for a in range(len(args)):
+                    if isinstance(args[a], Promise):
+                        if args[a].key == parent_id:
+                            args[a] = output
                 
                 for k, v in kwargs.items():
                     if isinstance(v, Promise):
-                        kwargs[k] = output if v.key == parent_id else promises[v.key]
+                        if v.key == parent_id:
+                            kwargs[k] = output
 
             # Execute unit of work, and push output to queue, if given.
             x = work(*args, **kwargs)
             if out_queue != None:
                 out_queue.put(x)
             
-            i += 1
+            iter_count += 1
             
             # Check halt conditions for root process (output-based lambda or iteration limit).
             if halt_condition != None and halt_condition(x):
                 break
+
     except Exception as e:
         if print_exc:
             _traceback.print_exc()
@@ -88,7 +105,7 @@ class AsyncDAG(DAG):
     # def add_edge(self, u_of_edge, v_of_edge, continue_on = Condition.Success):
     #     return super().add_edge(u_of_edge, v_of_edge, continue_on)
 
-    def execute(self, promises: dict[str, Promise] = {}, return_ref=False, print_exc=False):
+    def execute(self, *promises, return_ref=False, print_exc=False):
         """
         Basic wrapper for execution of the DAG's underlying callables.
         """
@@ -96,6 +113,8 @@ class AsyncDAG(DAG):
         queues = {}
         processes = {}
         join = set()
+        
+        promises: dict = { k: v for k, v in pairwise(promises) } if len(promises) > 0 else {}
 
         with _OutputLogger(str(_uuid.uuid4()), "INFO", "root") as _:
             with _futures.ThreadPoolExecutor() as executor:
@@ -116,7 +135,6 @@ class AsyncDAG(DAG):
                             'out_queue': queues.get(id)
                         }
                     })
-                    self._update_node(node, id, force=True)
                     processes[id] = executor.submit(
                         _event_wrapper,
                         _callable=node['callable'],
@@ -144,7 +162,6 @@ class AsyncDAG(DAG):
                             'out_queue': queues.get(id)
                         }
                     })
-                    self._update_node(node, id, force=True)
                     processes[id] = executor.submit(
                         _event_wrapper,
                         _callable=node['callable'],
