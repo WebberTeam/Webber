@@ -12,7 +12,7 @@ main_dag = DAG()
 name = main_dag.add_node(lambda: "World")
 
 queue_dag = etl.AsyncDAG()
-greeting = queue_dag.add_node(lambda n: f"Hello, {n}", "World", iterator=200)
+greeting = queue_dag.add_node(lambda n: f"Hello, {n}", Promise(name), iterator=200)
 writing  = queue_dag.add_node(writer, Promise(greeting))
 queue_dag.add_edge(greeting, writing)
 
@@ -25,11 +25,7 @@ main_dag.execute()
 print(time.time() - t)
 
 t1 = time.time()
-queue_dag.execute(print_exc=True)
-print(time.time() - t1)
-
-t1 = time.time()
-queue_dag.execute(print_exc=True)
+queue_dag.execute(name, "World", print_exc=True)
 print(time.time() - t1)
 
 t2 = time.time()
