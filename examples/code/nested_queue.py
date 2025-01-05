@@ -11,7 +11,7 @@ def writer(x):
 main_dag = DAG()
 name = main_dag.add_node(lambda: "World")
 
-queue_dag = queue.AsyncDAG()
+queue_dag = queue.QueueDAG()
 greeting = queue_dag.add_node(lambda n: f"Hello, {n}", Promise(name), iterator=200)
 writing  = queue_dag.add_node(writer, Promise(greeting))
 queue_dag.add_edge(greeting, writing)

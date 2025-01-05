@@ -73,7 +73,7 @@ def worker(work: Callable, args, kwargs: dict, promises: dict = {}, print_exc = 
         print('Exception during runtime, ending process...')
         raise e
 
-class AsyncDAG(DAG):
+class QueueDAG(DAG):
 
     conditions = {}
 

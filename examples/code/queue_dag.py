@@ -8,7 +8,7 @@ def writer(x):
     fd.close()
 
 
-dag = queue.AsyncDAG()
+dag = queue.QueueDAG()
 x = dag.add_node(lambda: "1", iterator=100)
 y = dag.add_node(writer, Promise(x))
 dag.add_edge(x, y)
