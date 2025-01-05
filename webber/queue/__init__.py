@@ -12,7 +12,7 @@ import concurrent.futures as _futures
 import webber.core as _core
 import webber.xcoms as _xcoms
 
-def worker(work: _T.Callable, args, kwargs: dict, promises: dict = {}, print_exc = False,
+def _worker(work: _T.Callable, args, kwargs: dict, promises: dict = {}, print_exc = False,
            parent_id: str = None, parent_process: _futures.Future = None, in_queue: _q.LifoQueue = None,
            halt_condition: _T.Callable = None, iter_limit: int = None, out_queue: _q.LifoQueue = None):
 
@@ -123,7 +123,7 @@ class QueueDAG(_core.DAG):
                     node = self.get_node(id)
                     queues[id] = _q.LifoQueue()
                     node.update({
-                        'callable': worker,
+                        'callable': _worker,
                         'args': tuple(),
                         'kwargs': {
                             'work': node.callable,
@@ -149,7 +149,7 @@ class QueueDAG(_core.DAG):
                     if len(list(self.graph.successors(id))) == 0:
                         endproc = id
                     node.update({
-                        'callable': worker,
+                        'callable': _worker,
                         'args': tuple(),
                         'kwargs': {
                             'work': node.callable,
