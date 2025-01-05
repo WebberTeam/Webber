@@ -1,15 +1,22 @@
 import webber.etl as etl
+import time
 from webber import Promise
 
 def writer(x):
-    print(x)
     fd = open('myfile.txt', 'a+')
     fd.writelines(x + "\n")
     fd.close()
 
 
 dag = etl.AsyncDAG()
-x = dag.add_node(lambda: "1", iterator=4)
+x = dag.add_node(lambda: "1", iterator=100)
 y = dag.add_node(writer, Promise(x))
 dag.add_edge(x, y)
-dag.execute()
+t = time.time()
+dag.execute(print_exc=True)
+print(time.time() - t)
+
+t1 = time.time()
+for i in range(100):
+    writer("1")
+print(time.time() - t1)

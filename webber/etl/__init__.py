@@ -12,55 +12,49 @@ from queue import LifoQueue
 import traceback as _traceback
 
 
-def worker(work: Callable, args, kwargs, print_exc = False,
+def worker(work: Callable, args, kwargs: dict, promises: dict = {}, print_exc = False,
            parent_id: str = None, parent_process: _futures.Future = None, in_queue: mp.Queue = None,
            halt_condition: Callable = None, iter_limit: int = None, out_queue: mp.Queue = None):
 
-    i = 0
-
-    while True:
-        
-        # For child processes, get latest value from the queue.
-        # If none are available and parent process is complete, break.
-        if in_queue != None:
-            try:
-                output = in_queue.get_nowait()
-            except Exception as e:
-                if not in_queue.empty():
-                    raise e
-                elif parent_process.done():
-                    break
-                continue
-            args = [
-                a if not isinstance(a, Promise) else output #and a.key != parent_id
-                for a in args
-            ]
-            kwargs = {
-                k: v if not isinstance(v, Promise) else output #and v.key != parent_id
-                for k, v in kwargs
-            }
+    try:
+        i = 0
+        args = list(args)
+        while iter_limit == None or i < iter_limit:
             
+            # For child processes, get latest value from the queue.
+            # If none are available and parent process is complete, break.
+            if in_queue != None:
+                try:
+                    output = in_queue.get_nowait()
+                except Exception as e:
+                    if not in_queue.empty():
+                        raise e
+                    elif parent_process.done():
+                        break
+                    continue
+                for i in range(len(args)):
+                    if isinstance(args[i], Promise):
+                        args[i] = output if args[i].key == parent_id else promises[v.key]
+                
+                for k, v in kwargs.items():
+                    if isinstance(v, Promise):
+                        kwargs[k] = output if v.key == parent_id else promises[v.key]
 
-        # Execute unit of work, and push output to queue, if given.
-        try:
+            # Execute unit of work, and push output to queue, if given.
             x = work(*args, **kwargs)
-        except Exception as e:
-            if print_exc:
-                _traceback.print_exc()
-            print('Exception during runtime, ending process...')
-            raise e
-
-        if out_queue != None:
-            out_queue.put(x)
-        
-        i += 1
-        
-        # Check halt conditions for root process (output-based lambda or iteration limit).
-        if halt_condition != None and halt_condition(x):
-            break
-        elif iter_limit != None and i == iter_limit:
-            break
-
+            if out_queue != None:
+                out_queue.put(x)
+            
+            i += 1
+            
+            # Check halt conditions for root process (output-based lambda or iteration limit).
+            if halt_condition != None and halt_condition(x):
+                break
+    except Exception as e:
+        if print_exc:
+            _traceback.print_exc()
+        print('Exception during runtime, ending process...')
+        raise e
 
 class AsyncDAG(DAG):
 
@@ -94,7 +88,7 @@ class AsyncDAG(DAG):
     # def add_edge(self, u_of_edge, v_of_edge, continue_on = Condition.Success):
     #     return super().add_edge(u_of_edge, v_of_edge, continue_on)
 
-    def execute(self, return_ref=False, print_exc=False):
+    def execute(self, promises: dict[str, Promise] = {}, return_ref=False, print_exc=False):
         """
         Basic wrapper for execution of the DAG's underlying callables.
         """
@@ -115,6 +109,7 @@ class AsyncDAG(DAG):
                         'kwargs': {
                             'work': node.callable,
                             'args': node.args, 'kwargs': node.kwargs,
+                            'promises': promises,
                             'print_exc': print_exc,
                             'halt_condition': self.conditions[id]['halt_condition'],
                             'iter_limit': self.conditions[id]['iter_limit'],
@@ -141,6 +136,7 @@ class AsyncDAG(DAG):
                         'kwargs': {
                             'work': node.callable,
                             'args': node.args, 'kwargs': node.kwargs,
+                            'promises': promises,
                             'print_exc': print_exc,
                             'parent_id': parent_id,
                             'parent_process': processes[parent_id],
@@ -162,7 +158,7 @@ class AsyncDAG(DAG):
                 for node in self.graph.nodes:
                     if processes[node].done():
                         join.add(node)
-            
+                
             return_val = []
             while not queues[endproc].empty():
                 return_val.append(queues[endproc].get())
