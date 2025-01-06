@@ -1,5 +1,4 @@
-import webber.queue as queue
-from webber import Promise, DAG
+from webber import Promise, DAG, QueueDAG
 import time
 
 def writer(x):
@@ -11,7 +10,7 @@ def writer(x):
 main_dag = DAG()
 name = main_dag.add_node(lambda: "World")
 
-queue_dag = queue.QueueDAG()
+queue_dag = QueueDAG()
 greeting = queue_dag.add_node(lambda n: f"Hello, {n}", Promise(name), iterator=200)
 writing  = queue_dag.add_node(writer, Promise(greeting))
 queue_dag.add_edge(greeting, writing)

@@ -13,8 +13,12 @@ import concurrent.futures as _futures
 import networkx as _nx
 import webber.edges as _edges
 import webber.xcoms as _xcoms
+import webber.queue as _queue
 
 from webber.edges import Condition, dotdict, edgedict
+
+import queue as _q
+import itertools as _it
 
 __all__ = ["DAG", "Condition"]
 
@@ -865,3 +869,112 @@ class DAG:
                                     started.add(successor)
                         # Initialized nodes that are incomplete or not yet documented as complete.
                         events = started.difference(complete.union(failed).union(skipped))
+
+class QueueDAG(DAG):
+
+    conditions = {}
+
+    def __init__(self):
+        super().__init__()
+
+    def add_node(self, node, *args, **kwargs):
+        
+        halt_condition = kwargs.pop('halt_condition', None)
+        iterator: int = kwargs.pop('iterator', None)
+        max_iter: int = kwargs.pop('max_iter', None)
+
+        return_val = super().add_node(node, *args, **kwargs)
+        
+        if max_iter != None:
+            iter_limit = int(max_iter)
+        elif iterator != None:
+            iter_limit = int(iterator)
+        else:
+            iter_limit = None
+        
+        self.conditions[return_val] = {
+            'halt_condition': halt_condition,
+            'iter_limit': iter_limit
+        }
+
+        return return_val
+        
+    # def add_edge(self, u_of_edge, v_of_edge, continue_on = Condition.Success):
+    #     return super().add_edge(u_of_edge, v_of_edge, continue_on)
+
+    def execute(self, *promises, return_ref=False, print_exc=False):
+        """
+        Basic wrapper for execution of the DAG's underlying callables.
+        """
+
+        queues = {}
+        processes = {}
+        join = set()
+        
+        promises: dict = { k: v for k, v in _it.pairwise(promises) } if len(promises) > 0 else {}
+
+        with _OutputLogger(str(_uuid.uuid4()), "INFO", "root") as _:
+            with _futures.ThreadPoolExecutor() as executor:
+
+                for id in self.root:
+                    node = self.get_node(id)
+                    queues[id] = _q.LifoQueue()
+                    node.update({
+                        'callable': _queue._worker,
+                        'args': tuple(),
+                        'kwargs': {
+                            'work': node.callable,
+                            'args': node.args, 'kwargs': node.kwargs,
+                            'promises': promises,
+                            'print_exc': print_exc,
+                            'halt_condition': self.conditions[id]['halt_condition'],
+                            'iter_limit': self.conditions[id]['iter_limit'],
+                            'out_queue': queues.get(id)
+                        }
+                    })
+                    processes[id] = executor.submit(
+                        _event_wrapper,
+                        _callable=node['callable'],
+                        _name=node['name'],
+                        _args=node['args'],
+                        _kwargs=node['kwargs']
+                    )
+                
+                for parent_id, id in self.graph.edges:
+                    node = self.get_node(id)
+                    queues[id] = _q.LifoQueue()
+                    if len(list(self.graph.successors(id))) == 0:
+                        endproc = id
+                    node.update({
+                        'callable': _queue._worker,
+                        'args': tuple(),
+                        'kwargs': {
+                            'work': node.callable,
+                            'args': node.args, 'kwargs': node.kwargs,
+                            'promises': promises,
+                            'print_exc': print_exc,
+                            'parent_id': parent_id,
+                            'parent_process': processes[parent_id],
+                            'in_queue': queues.get(parent_id),
+                            'out_queue': queues.get(id)
+                        }
+                    })
+                    processes[id] = executor.submit(
+                        _event_wrapper,
+                        _callable=node['callable'],
+                        _name=node['name'],
+                        _args=node['args'],
+                        _kwargs=node['kwargs']
+                    )
+
+            
+            while len(join) != len(self.graph.nodes):
+                for node in self.graph.nodes:
+                    if processes[node].done():
+                        join.add(node)
+                
+            return_val = []
+            while not queues[endproc].empty():
+                return_val.append(queues[endproc].get())
+            
+            return return_val
