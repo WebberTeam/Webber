@@ -899,8 +899,21 @@ class QueueDAG(DAG):
 
         return return_val
         
-    # def add_edge(self, u_of_edge, v_of_edge, continue_on = Condition.Success):
-    #     return super().add_edge(u_of_edge, v_of_edge, continue_on)
+    def add_edge(self, u_of_edge, v_of_edge, continue_on = Condition.Success):
+        for node in (u_of_edge, v_of_edge):
+            try:
+                node_id = self.node_id(node)
+            except:
+                continue
+        
+            filter = (lambda e: e.parent == node_id) if node == u_of_edge else (lambda e: e.child == node_id)
+            try:
+                assert(len(self.filter_edges(filter)) == 0)
+            except Exception as e:
+                e.add_note("Queue DAG nodes may have a maximum of one child and one parent worker.")
+                raise e
+
+        return super().add_edge(u_of_edge, v_of_edge, continue_on)
 
     def execute(self, *promises, return_ref=False, print_exc=False):
         """
