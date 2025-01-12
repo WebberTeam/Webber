@@ -20,7 +20,7 @@ from webber.edges import Condition, dotdict, edgedict
 import queue as _q
 import itertools as _it
 
-__all__ = ["DAG", "Condition"]
+__all__ = ["DAG", "Condition", "QueueDAG"]
 
 def _iscallable(function: any):
     return callable(function)

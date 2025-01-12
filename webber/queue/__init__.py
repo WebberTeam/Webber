@@ -8,7 +8,7 @@ import traceback as _traceback
 import concurrent.futures as _futures
 import webber.xcoms as _xcoms
 
-__all__ = ["QueueDAG"]
+__all__ = []
 
 def _worker(work: _T.Callable, args, kwargs: dict, promises: dict = {}, print_exc = False,
            parent_id: str = None, parent_process: _futures.Future = None, in_queue: _q.LifoQueue = None,
