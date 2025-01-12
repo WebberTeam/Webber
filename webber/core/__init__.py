@@ -487,8 +487,7 @@ class DAG:
                 N = N[0]
             else:
                 node_id = self.node_id(N[0])
-                node_data = dotdict(self.graph.nodes[node_id])
-                # node_data['id'] = node_id
+                node_data = [dotdict(self.graph.nodes[node_id])]
                 return node_data
             
         if not len(N) == len(set(N)):
