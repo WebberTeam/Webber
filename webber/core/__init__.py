@@ -689,7 +689,7 @@ class DAG:
     def resolve_promise(self, promise: _xcoms.Promise) -> _xcoms.Promise:
         """
         Returns a Promise with a unique string identifier, if a given Promise is valid, based on the DAG's current scope.
-        Raises `webber.xcom.InvalidCallable` if Promise requests a callable that is out of scope.
+        Raises `webber.xcoms.InvalidCallable` if Promise requests a callable that is out of scope.
         """
         try:
             key = self.node_id(promise.key)
