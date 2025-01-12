@@ -517,8 +517,8 @@ class DAG:
         Use get_edges for more flexible controls.
         """
         if not data:
-            return [e[:2] for e in list(self.graph.edges.data()) if filter(edgedict(e))]
-        return [edgedict(e) for e in list(self.graph.edges.data()) if filter(edgedict(e))]
+            return [e[:2] for e in list(self.graph.edges.data()) if filter(edgedict(*e))]
+        return [edgedict(e) for e in list(self.graph.edges.data()) if filter(edgedict(*e))]
 
     def retry_node(self, identifier: _T.Union[str,_T.Callable], count: int):
         """
