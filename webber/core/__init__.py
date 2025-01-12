@@ -950,7 +950,7 @@ class QueueDAG(DAG):
                     node = self.get_node(id)
                     queues[id] = _q.LifoQueue()
                     if len(list(self.graph.successors(id))) == 0:
-                        endproc = id
+                        end_proc = id
                     node.update({
                         'callable': _queue._worker,
                         'args': tuple(),
@@ -978,9 +978,9 @@ class QueueDAG(DAG):
                 for node in self.graph.nodes:
                     if processes[node].done():
                         join.add(node)
-                
+            
             return_val = []
-            while not queues[endproc].empty():
-                return_val.append(queues[endproc].get())
+            while not queues[end_proc].empty():
+                return_val.append(queues[end_proc].get())
             
             return return_val
