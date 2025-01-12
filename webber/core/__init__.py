@@ -476,10 +476,6 @@ class DAG:
         """
         if len(N) == 0:
             node_data = list(self.graph.nodes.values())
-            # for i in range(len(node_data)):
-            #     _id = node_data[i][0]
-            #     node_data[i] = node_data[i][1]
-            #     node_data[i]['id'] = _id
             return [dotdict(d) for d in node_data]
 
         elif len(N) == 1:
@@ -496,8 +492,6 @@ class DAG:
         
         node_ids  = [self.node_id(n) for n in N]
         node_data = [dotdict(self.graph.nodes[n]) for n in node_ids]
-        # for i, _id in enumerate(node_ids):
-        #     node_data[i]['id'] = _id
         return node_data
 
     def filter_nodes(self, filter: _types.LambdaType, data: bool = False):
