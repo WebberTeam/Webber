@@ -115,16 +115,17 @@ class DAG:
 
         On success, returns Tuple of the new edge's unique identifiers.
         """
-
-        # Ensure both nodes are either callable or in string format.
+        # Validate inputs prior to execution
+        # - Nodes must be identifiers or callables
+        # - Conditions must belong to the webber.edges.Condition class
         if not (isinstance(u_of_edge,str) or _iscallable(u_of_edge)):
             err_msg = f"Outgoing node {u_of_edge} must be a string or a Python callable"
             raise TypeError(err_msg)
         if not (isinstance(v_of_edge,str) or _iscallable(v_of_edge)):
             err_msg = f"Outgoing node {v_of_edge} must be a string or a Python callable"
             raise TypeError(err_msg)
-
-        new_callable = None
+        if not isinstance(continue_on, Condition):
+            raise TypeError("Edge conditions must use the webber.edges.Condition class.")
 
         # Base Case 0: No nodes are present in the DAG:
         # Ensure that both nodes are callables, then add both to the graph and
@@ -143,15 +144,9 @@ class DAG:
 
         node_names, node_callables = zip(*self.graph.nodes(data='callable'))
         graph_edges = list(self.graph.edges(data=False))
+        new_callables = dict()
 
         if _iscallable(u_of_edge) and _iscallable(v_of_edge):
-
-            # Base Case 1: Both nodes are callable and are not present in the DAG:
-            # Add both nodes to the DAG and assign the outgoing node as a root.
-            if u_of_edge not in node_callables and v_of_edge not in node_callables:
-                outgoing_node = self.add_node(u_of_edge)
-                incoming_node = self.add_node(v_of_edge)
-                return outgoing_node, incoming_node
 
             # Error Cases 0, 1: Either of the callables appear more than once in the DAG.
             if node_callables.count(u_of_edge) > 1:
@@ -162,12 +157,21 @@ class DAG:
             if node_callables.count(v_of_edge) > 1:
                 err_msg = f"Incoming callable {v_of_edge.__name__} " \
                         + "exists more than once in this DAG. " \
-                        + "Use the unique identifier of the required node or add a new node."
+                        + "Use the unique string identifier of the required node."
                 raise ValueError(err_msg)
-
-            # Both callables exist only once in the DAG -- we can now use their unique identifiers.
-            outgoing_node = node_names[ node_callables.index(u_of_edge) ]
-            incoming_node = node_names[ node_callables.index(v_of_edge) ]
+            
+            # Base Case 1: Both args are callables and will be present in the DAG scope no more than once.
+            # We will create new nodes if necessary, after validation, and get the unique string identifiers of the nodes.
+            try:
+                outgoing_node = self.node_id(u_of_edge)
+            except:
+                new_callables[u_of_edge] = u_of_edge
+                outgoing_node = _edges.label_node(u_of_edge)
+            try:
+                incoming_node = self.node_id(v_of_edge)
+            except:
+                new_callables[v_of_edge] = v_of_edge
+                incoming_node = _edges.label_node(v_of_edge)
 
         else:
 
@@ -176,7 +180,7 @@ class DAG:
                 err_msg = f"Outgoing node {u_of_edge} not in DAG's current scope."
                 raise ValueError(err_msg)
             if isinstance(v_of_edge, str) and v_of_edge not in node_names:
-                err_msg = f"Outgoing node {v_of_edge} not in DAG's current scope."
+                err_msg = f"Incoming node {v_of_edge} not in DAG's current scope."
                 raise ValueError(err_msg)
 
             # Both nodes' unique identifiers are present in the DAG
@@ -187,51 +191,31 @@ class DAG:
 
             # Otherwise, one of the nodes is a callable, and the other is a valid unique identifier.
             else:
-                if _iscallable(u_of_edge):
-
-                    # Error Case 4: The requested callable exists more than once in the DAG.
-                    if node_callables.count(u_of_edge) > 1:
-                        err_msg = f"Outgoing callable {u_of_edge.__name__} " \
+                for node in (u_of_edge, v_of_edge):
+                    def _assign_node(n):
+                        # For the argument that is a unique string identifier, assign and continue.
+                        if not _iscallable(n):
+                            return n
+                        # Error Case 4: The requested callable exists more than once in the DAG.
+                        if node_callables.count(n) > 1:
+                            err_msg = f"Outgoing callable {n.__name__} " \
                                 + "exists more than once in this DAG. " \
                                 + "Use the unique ID of the required node or add a new node."
-                        raise ValueError(err_msg)
-
-                    # If the callable exists only once in the DAG, use its unique identifier to
-                    # evaluate the requested edge.
-                    if node_callables.count(u_of_edge) == 1:
-                        outgoing_node = node_names[ node_callables.index(u_of_edge) ]
-
-                    # If the callable has never been added to the DAG, generate temporary unique ID
-                    # and flag the callable for later addition if requested edge passes validation.
+                            raise ValueError(err_msg)
+                        # If the callable exists only once in the DAG, use its unique identifier to
+                        # evaluate the requested edge.
+                        if node_callables.count(n) == 1:
+                            return node_names[ node_callables.index(n) ]
+                        # Otherwise, the callable is new and needs to be added to the DAG scope.
+                        else:
+                            new_callables[n] = n
+                            return _edges.label_node(n)
+                    if node == u_of_edge:
+                        outgoing_node = _assign_node(node)
                     else:
-                        new_callable  = u_of_edge
-                        outgoing_node = _edges.label_node(u_of_edge)
+                        incoming_node = _assign_node(node)
 
-                    incoming_node = v_of_edge
-
-                else:
-
-                    # Error Case 5: The requested callable exists more than once in the DAG.
-                    if node_callables.count(v_of_edge) > 1:
-                        err_msg = f"Outgoing callable {v_of_edge.__name__} " \
-                                + "exists more than once in this DAG. " \
-                                + "Use the unique identifier of the required node."
-                        raise ValueError(err_msg)
-
-                    # If the callable exists only once in the DAG, use its unique identifier to
-                    # evaluate the requested edge.
-                    if node_callables.count(v_of_edge) == 1:
-                        incoming_node = node_names[ node_callables.index(v_of_edge) ]
-
-                    # If the callable has never been added to the DAG, generate temporary unique ID
-                    # and flag the callable for later addition if requested edge passes validation.
-                    else:
-                        new_callable  = v_of_edge
-                        incoming_node = _edges.label_node(v_of_edge)
-
-                    outgoing_node = u_of_edge
-
-        # Error Case 6: Both callables exist only once in the DAG,
+        # Error Case 5: Both callables exist only once in the DAG,
         # but an edge already exists between them.
         if (outgoing_node, incoming_node) in graph_edges:
             err_msg = f"Requested edge ({outgoing_node}, {incoming_node}) already has " \
@@ -241,24 +225,23 @@ class DAG:
         # Ensure that no cycles will be created by adding this edge to the DAG.
         test_edges: list = graph_edges + [(outgoing_node, incoming_node)]
 
-        # Error Case 7: Both callables exist only once in the DAG,
+        # Error Case 6: Both callables exist only once in the DAG,
         # but adding an edge between them creates circular dependencies.
         if not _nx.is_directed_acyclic_graph(_nx.DiGraph(test_edges)):
             err_msg = f"Requested edge ({outgoing_node}, {incoming_node}) " \
-                    + "results in circular dependecies."
+                    + "results in circular dependencies."
             raise ValueError(err_msg)
 
         # We can now add the edge to the DAG, since we are certain it will not result in
         # illegal dependencies/behavior.
+        # First, we should account for potential new nodes. This also handles
+        # duplicates on first entry to the DAG (e.g.: edge == (print, print))
+        if new_callables.get(u_of_edge) != None:
+            outgoing_node = self.add_node(new_callables[u_of_edge])
+        if new_callables.get(v_of_edge) != None:
+            incoming_node = self.add_node(new_callables[v_of_edge])
 
-        # First, we should account for potential new nodes:
-        if new_callable == u_of_edge:
-            outgoing_node = self.add_node(u_of_edge)
-
-        elif new_callable == v_of_edge:
-            incoming_node = self.add_node(v_of_edge)
-
-        # Then we can add the new edge and re-evaluate the roots in our graph.
+        # Then we can add the new edge.
         self.graph.add_edge(outgoing_node, incoming_node, Condition = continue_on)
         return (outgoing_node, incoming_node)
     
