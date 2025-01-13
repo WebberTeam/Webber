@@ -350,6 +350,14 @@ class DAG:
         edge = {k: v for k,v in edgedict.items() if k not in ('parent', 'child', 'id')}
         self.graph.edges[(edge_id[0], edge_id[1])].update(edge)
 
+    def relabel_node(self, node, label: str):
+        node_id = self.node_id(node)
+        if not isinstance(label, str) or len(label) == 0:
+            err_msg = "Node label must be a Python string with one or more characters."
+            raise ValueError(err_msg)
+        self.update_nodes(node_id, data = {'name': label})
+        return label
+
     def update_nodes(self, *N, filter: _types.LambdaType = None, data = None, callable = None, args = None, kwargs = None):
         """
         """
