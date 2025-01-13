@@ -727,6 +727,9 @@ class DAG:
         """
         def __init__(self, graph: _nx.DiGraph, roots: list, print_exc: bool = False) -> None:
             
+            with _OutputLogger(str(_uuid.uuid4()), "INFO", "root") as _:
+                
+                # Skip execution if there are no callables in scope.
             if len(graph.nodes) == 0:
                 _logging.warning('Given DAG has no callables in scope. Skipping execution...')
                 return
@@ -916,6 +919,12 @@ class QueueDAG(DAG):
         promises: dict = { k: v for k, v in _it.pairwise(promises) } if len(promises) > 0 else {}
 
         with _OutputLogger(str(_uuid.uuid4()), "INFO", "root") as _:
+
+            # Skip execution if there are no callables in scope.
+            if len(self.graph.nodes) == 0:
+                print('Given DAG has no callables in scope. Skipping execution...')
+                return
+
             with _futures.ThreadPoolExecutor() as executor:
 
                 for id in self.root:
