@@ -726,6 +726,11 @@ class DAG:
         Base class used to execute DAG in embarrassingly parallel.
         """
         def __init__(self, graph: _nx.DiGraph, roots: list, print_exc: bool = False) -> None:
+            
+            if len(graph.nodes) == 0:
+                _logging.warning('Given DAG has no callables in scope. Skipping execution...')
+                return
+            
             with _OutputLogger(str(_uuid.uuid4()), "INFO", "root") as _:
                 # Initialize local variables for execution.
                 complete, started, failed, skipped = set(), set(), set(), set()
