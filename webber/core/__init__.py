@@ -730,11 +730,10 @@ class DAG:
             with _OutputLogger(str(_uuid.uuid4()), "INFO", "root") as _:
                 
                 # Skip execution if there are no callables in scope.
-            if len(graph.nodes) == 0:
-                _logging.warning('Given DAG has no callables in scope. Skipping execution...')
-                return
-            
-            with _OutputLogger(str(_uuid.uuid4()), "INFO", "root") as _:
+                if len(graph.nodes) == 0:
+                    print('Given DAG has no callables in scope. Skipping execution...')
+                    return
+
                 # Initialize local variables for execution.
                 complete, started, failed, skipped = set(), set(), set(), set()
                 events = set(roots)
