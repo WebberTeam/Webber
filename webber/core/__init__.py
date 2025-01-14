@@ -364,6 +364,9 @@ class DAG:
         if len(N) == 0 and filter == None:
             raise ValueError("Either an array of node IDs or node data (N) or a filter must be passed to this function.")
 
+        elif len(N) > 0 and filter != None:
+            raise ValueError("Node data array (N) and filter argument are mutually exclusive, and cannot both be defined to identify nodes to update DAG's scope.")
+
         elif isinstance(N, dict) or isinstance(N, str):
             N = [N]
 
