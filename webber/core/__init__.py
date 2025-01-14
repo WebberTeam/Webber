@@ -67,6 +67,7 @@ class _OutputLogger:
         self._redirector.__exit__(exc_type, exc_value, traceback)
 
 def _event_wrapper(_callable: callable, _name: str, _args, _kwargs):
+    """Wrapper used by Webber DAGs to log and execute a Python callables as a unit of work."""
     with _OutputLogger(str(_uuid.uuid4()), "INFO", _name) as _:
         return _callable(*_args, **_kwargs)
 
@@ -267,6 +268,32 @@ class DAG:
 
     def update_edges(self, *E, continue_on: Condition, filter: _types.LambdaType = None, data = None):
         """
+        Flexible function to update properties of edges in the DAG's scope, 
+        based on unique identifier(s) (e.g.: string IDs or unique callables) or a
+        lambda filter using the edgedict syntax.
+        
+        List of nodes to update or filter argument is expected. Valid edge lists include:
+
+        \t update_edges((node1, node2), ...)       or update_edges([(node1, node2)], ...)
+
+        \t update_edges((node1, callable2), ...)   or update_edges([(node1, callable2)], ...)
+        
+        \t update_edges(edgedict),                 where isinstance(edgedict, webber.edges.edgedict) == True
+
+        Parameters:
+
+        > continue_on: webber.edges.Condition value to update matching edges with, 
+        
+        \t Execute child on success, failure, or any exit state, of the parent node
+
+        > filter: lambda property that can be used instead of a list of edges to be updated.
+        
+        \t filter = (lambda e: n.parent == print or e.child == print)
+
+        > data: If given, expects a dictionary or edgedict to update edge properties. Currently, only continue_on property should be set.
+
+        \t data = { 'continue_on': webber.edges.Condition }
+
         """
         if len(E) == 0 and filter == None:
             raise ValueError("Either an array of edge IDs / edgedicts (E) or a filter must be passed to this function.")
@@ -311,6 +338,11 @@ class DAG:
                     self.graph.edges[e]['Condition'] = continue_on
 
     def _update_edge(self, edgedict: dict, id: tuple[str, str] = None, force: bool = False):
+        """
+        Internal only. Update properties of an individual edge within a DAG's scope, 
+        given a well-structured dictionary and the tuple identifier of the network edge. 
+        Force argument bypasses validation, and should only be used internally.
+        """
         if id != None:
             try:
                 if edgedict.get('id') and id != edgedict['id']:
@@ -350,7 +382,12 @@ class DAG:
         edge = {k: v for k,v in edgedict.items() if k not in ('parent', 'child', 'id')}
         self.graph.edges[(edge_id[0], edge_id[1])].update(edge)
 
-    def relabel_node(self, node, label: str):
+    def relabel_node(self, node: _T.Union[str, _T.Callable], label: str):
+        """
+        Update the label, or name, given to a node in the DAG's scope, 
+        given a Python string and a node identifier. 
+        Well-structured wrapper for a common use-case of DAG.update_nodes.
+        """
         node_id = self.node_id(node)
         if not isinstance(label, str) or len(label) == 0:
             err_msg = "Node label must be a Python string with one or more characters."
@@ -360,6 +397,43 @@ class DAG:
 
     def update_nodes(self, *N, filter: _types.LambdaType = None, data = None, callable = None, args = None, kwargs = None):
         """
+        Flexible function to update properties of nodes in the DAG's scope, 
+        based on unique identifier(s) (e.g.: string IDs or unique callables) or a
+        lambda filter using the dotdict syntax.
+        
+        List of nodes to update or filter argument is expected. Valid node lists include:
+
+        \t update_nodes(node_id, ...)           or update_nodes([node_id], ...)
+
+        \t update_nodes(callable, ...)          or update_nodes([callable], ...)
+        
+        \t update_nodes(node1, node2, ...)      or update_nodes([node1, node2], ...)
+        
+        \t update_nodes(node1, callable2, ...)  or update_nodes([node1, callable2], ...)
+
+        > update_nodes(node_id, ...) is equivalent to update_nodes(filter = lambda n: n.id == node_id)
+
+        Parameters:
+
+        > filter: lambda property that can be used instead of a list of nodes to be updated.
+        
+        \t filter = (lambda n: n.callable == print or 'Hello, World' in n.args)
+
+        > data: If given, expects a dictionary or dotdict to update node properties. At least one property should be defined if data argument is set.
+            Any value given to the id key will be ignored. Allowed for ease of use with DAG.get nodes method.
+            
+        \t data = {
+            \t 'callable': print,
+            \t 'args': ['Hello', 'World'],
+            \t 'kwargs': {'sep': ', '},
+            \t 'name': 'custom_label',
+            \t 'id': 'unique-identifier'
+            \t}
+
+        > args: Positional arguments to be passed to matching callables in the DAG's scope, using a Python iterable (e.g.: Tuple or List).
+
+        > kwargs: Keyword arguments to be passed to matching callables in the DAG's scope, using a Python dictionary.
+
         """
         if len(N) == 0 and filter == None:
             raise ValueError("Either an array of node IDs or node data (N) or a filter must be passed to this function.")
@@ -621,6 +695,9 @@ class DAG:
     
     def _update_node(self, nodedict: dict, id: str = None, force: bool = False):
         """
+        Internal only. Update properties of single node within a DAG's scope, 
+        given a well-structured dictionary and the tuple identifier of the network edge. 
+        Force argument bypasses dictionary validation, and should only be used internally.
         """
         if id != None:
             try:
@@ -865,6 +942,23 @@ class DAG:
                         events = started.difference(complete.union(failed).union(skipped))
 
 class QueueDAG(DAG):
+    """
+    #### Experimental, as of v0.2. ####
+
+    Directed Acyclic Graph used to queue and execute Pythonic callables in parallel,
+    while stringing the outputs of those callables in linear sequences.
+
+    Queue DAG nodes are repeated until the DAG executor completes or is killed, depending on the 
+    behavior of root nodes to determine if and/or when the DAG run has been completed.
+
+    Root nodes will be re-executed until culled by one of two conditions:
+    1. A max number of iterations has been completed, or
+    2. The output of the root node's callable matches a lambda halt_condition.
+
+    Both conditions can be set at run-time.
+
+    As of v0.2, QueueDAG experiences extreme latency when nested inside of a standard webber.DAG class.
+    """
 
     conditions = {}
 
@@ -872,7 +966,20 @@ class QueueDAG(DAG):
         super().__init__()
 
     def add_node(self, node, *args, **kwargs):
+        """
+        Adds a callable with positional and keyword arguments to the DAG's underlying graph.
+        On success, return unique identifier for the new node.
         
+        Reserved key-words are used for Queue DAG definitions:
+        
+        - halt_condition: Lambda function used to halt repeated execution of a Queue DAG node that is independent of other callables.
+
+        \t halt_condition = (lambda output: output == None) 
+
+        - iterator: Discrete number of times that Queue DAG node should be executed. Meant to be mutually-exclusive of halt_condition argument.
+
+        - max_iter: Maximum number of times that Queue DAG node should be executed. Meant for use with halt_condition in order to prevent forever loop.
+        """
         halt_condition = kwargs.pop('halt_condition', None)
         iterator: int = kwargs.pop('iterator', None)
         max_iter: int = kwargs.pop('max_iter', None)
@@ -894,6 +1001,10 @@ class QueueDAG(DAG):
         return return_val
         
     def add_edge(self, u_of_edge, v_of_edge, continue_on = Condition.Success):
+        """
+        Adds an edge between nodes in the Queue DAG's underlying graph.
+        Queue DAG nodes may have a maximum of one child and one parent worker.
+        """
         for node in (u_of_edge, v_of_edge):
             try:
                 node_id = self.node_id(node)
@@ -913,7 +1024,6 @@ class QueueDAG(DAG):
         """
         Basic wrapper for execution of the DAG's underlying callables.
         """
-
         queues = {}
         processes = {}
         join = set()
