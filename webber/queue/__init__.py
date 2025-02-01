@@ -1,6 +1,6 @@
 """
-Experimenting with multiprocessing queues.
-Hopeful that this will become an extension of the DAG class.
+v0.2: Experimental implementation. Not ready for use in production contexts.
+Helper class for queue-based DAG implementations.
 """
 import typing as _T
 import queue as _q
