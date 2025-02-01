@@ -13,10 +13,14 @@ import concurrent.futures as _futures
 import networkx as _nx
 import webber.edges as _edges
 import webber.xcoms as _xcoms
+import webber.queue as _queue
 
 from webber.edges import Condition, dotdict, edgedict
 
-__all__ = ["DAG", "Condition"]
+import queue as _q
+import itertools as _it
+
+__all__ = ["DAG", "Condition", "QueueDAG"]
 
 def _iscallable(function: any):
     return callable(function)
@@ -63,6 +67,7 @@ class _OutputLogger:
         self._redirector.__exit__(exc_type, exc_value, traceback)
 
 def _event_wrapper(_callable: callable, _name: str, _args, _kwargs):
+    """Wrapper used by Webber DAGs to log and execute a Python callables as a unit of work."""
     with _OutputLogger(str(_uuid.uuid4()), "INFO", _name) as _:
         return _callable(*_args, **_kwargs)
 
@@ -70,7 +75,6 @@ class DAG:
     """
     Directed Acyclic Graph used to represent Pythonic tasks in parallel.
     """
-
     def add_node(self, node, *args, **kwargs) -> str:
         """
         Adds a callable with positional and keyword arguments to the DAG's underlying graph.
@@ -82,13 +86,14 @@ class DAG:
 
         node_name = _edges.label_node(node)
 
-        for arg in args:
-            if isinstance(arg, _xcoms.Promise):
-                self._validate_promise(arg)
+        args = tuple([
+            arg if not isinstance(args, _xcoms.Promise) else self.resolve_promise(arg)
+            for arg in args
+        ])
 
-        for val in kwargs.values():
+        for k, val in kwargs.items():
             if isinstance(val, _xcoms.Promise):
-                self._validate_promise(val)
+                kwargs[k] = self.resolve_promise(val)
 
         self.graph.add_node(
             node_for_adding=node_name,
@@ -111,16 +116,17 @@ class DAG:
 
         On success, returns Tuple of the new edge's unique identifiers.
         """
-
-        # Ensure both nodes are either callable or in string format.
+        # Validate inputs prior to execution
+        # - Nodes must be identifiers or callables
+        # - Conditions must belong to the webber.edges.Condition class
         if not (isinstance(u_of_edge,str) or _iscallable(u_of_edge)):
             err_msg = f"Outgoing node {u_of_edge} must be a string or a Python callable"
             raise TypeError(err_msg)
         if not (isinstance(v_of_edge,str) or _iscallable(v_of_edge)):
             err_msg = f"Outgoing node {v_of_edge} must be a string or a Python callable"
             raise TypeError(err_msg)
-
-        new_callable = None
+        if not isinstance(continue_on, Condition):
+            raise TypeError("Edge conditions must use the webber.edges.Condition class.")
 
         # Base Case 0: No nodes are present in the DAG:
         # Ensure that both nodes are callables, then add both to the graph and
@@ -139,15 +145,9 @@ class DAG:
 
         node_names, node_callables = zip(*self.graph.nodes(data='callable'))
         graph_edges = list(self.graph.edges(data=False))
+        new_callables = dict()
 
         if _iscallable(u_of_edge) and _iscallable(v_of_edge):
-
-            # Base Case 1: Both nodes are callable and are not present in the DAG:
-            # Add both nodes to the DAG and assign the outgoing node as a root.
-            if u_of_edge not in node_callables and v_of_edge not in node_callables:
-                outgoing_node = self.add_node(u_of_edge)
-                incoming_node = self.add_node(v_of_edge)
-                return outgoing_node, incoming_node
 
             # Error Cases 0, 1: Either of the callables appear more than once in the DAG.
             if node_callables.count(u_of_edge) > 1:
@@ -158,12 +158,21 @@ class DAG:
             if node_callables.count(v_of_edge) > 1:
                 err_msg = f"Incoming callable {v_of_edge.__name__} " \
                         + "exists more than once in this DAG. " \
-                        + "Use the unique identifier of the required node or add a new node."
+                        + "Use the unique string identifier of the required node."
                 raise ValueError(err_msg)
-
-            # Both callables exist only once in the DAG -- we can now use their unique identifiers.
-            outgoing_node = node_names[ node_callables.index(u_of_edge) ]
-            incoming_node = node_names[ node_callables.index(v_of_edge) ]
+            
+            # Base Case 1: Both args are callables and will be present in the DAG scope no more than once.
+            # We will create new nodes if necessary, after validation, and get the unique string identifiers of the nodes.
+            try:
+                outgoing_node = self.node_id(u_of_edge)
+            except:
+                new_callables[u_of_edge] = u_of_edge
+                outgoing_node = _edges.label_node(u_of_edge)
+            try:
+                incoming_node = self.node_id(v_of_edge)
+            except:
+                new_callables[v_of_edge] = v_of_edge
+                incoming_node = _edges.label_node(v_of_edge)
 
         else:
 
@@ -172,7 +181,7 @@ class DAG:
                 err_msg = f"Outgoing node {u_of_edge} not in DAG's current scope."
                 raise ValueError(err_msg)
             if isinstance(v_of_edge, str) and v_of_edge not in node_names:
-                err_msg = f"Outgoing node {v_of_edge} not in DAG's current scope."
+                err_msg = f"Incoming node {v_of_edge} not in DAG's current scope."
                 raise ValueError(err_msg)
 
             # Both nodes' unique identifiers are present in the DAG
@@ -183,51 +192,31 @@ class DAG:
 
             # Otherwise, one of the nodes is a callable, and the other is a valid unique identifier.
             else:
-                if _iscallable(u_of_edge):
-
-                    # Error Case 4: The requested callable exists more than once in the DAG.
-                    if node_callables.count(u_of_edge) > 1:
-                        err_msg = f"Outgoing callable {u_of_edge.__name__} " \
+                for node in (u_of_edge, v_of_edge):
+                    def _assign_node(n):
+                        # For the argument that is a unique string identifier, assign and continue.
+                        if not _iscallable(n):
+                            return n
+                        # Error Case 4: The requested callable exists more than once in the DAG.
+                        if node_callables.count(n) > 1:
+                            err_msg = f"Outgoing callable {n.__name__} " \
                                 + "exists more than once in this DAG. " \
                                 + "Use the unique ID of the required node or add a new node."
-                        raise ValueError(err_msg)
-
-                    # If the callable exists only once in the DAG, use its unique identifier to
-                    # evaluate the requested edge.
-                    if node_callables.count(u_of_edge) == 1:
-                        outgoing_node = node_names[ node_callables.index(u_of_edge) ]
-
-                    # If the callable has never been added to the DAG, generate temporary unique ID
-                    # and flag the callable for later addition if requested edge passes validation.
+                            raise ValueError(err_msg)
+                        # If the callable exists only once in the DAG, use its unique identifier to
+                        # evaluate the requested edge.
+                        if node_callables.count(n) == 1:
+                            return node_names[ node_callables.index(n) ]
+                        # Otherwise, the callable is new and needs to be added to the DAG scope.
+                        else:
+                            new_callables[n] = n
+                            return _edges.label_node(n)
+                    if node == u_of_edge:
+                        outgoing_node = _assign_node(node)
                     else:
-                        new_callable  = u_of_edge
-                        outgoing_node = _edges.label_node(u_of_edge)
+                        incoming_node = _assign_node(node)
 
-                    incoming_node = v_of_edge
-
-                else:
-
-                    # Error Case 5: The requested callable exists more than once in the DAG.
-                    if node_callables.count(v_of_edge) > 1:
-                        err_msg = f"Outgoing callable {v_of_edge.__name__} " \
-                                + "exists more than once in this DAG. " \
-                                + "Use the unique identifier of the required node."
-                        raise ValueError(err_msg)
-
-                    # If the callable exists only once in the DAG, use its unique identifier to
-                    # evaluate the requested edge.
-                    if node_callables.count(v_of_edge) == 1:
-                        incoming_node = node_names[ node_callables.index(v_of_edge) ]
-
-                    # If the callable has never been added to the DAG, generate temporary unique ID
-                    # and flag the callable for later addition if requested edge passes validation.
-                    else:
-                        new_callable  = v_of_edge
-                        incoming_node = _edges.label_node(v_of_edge)
-
-                    outgoing_node = u_of_edge
-
-        # Error Case 6: Both callables exist only once in the DAG,
+        # Error Case 5: Both callables exist only once in the DAG,
         # but an edge already exists between them.
         if (outgoing_node, incoming_node) in graph_edges:
             err_msg = f"Requested edge ({outgoing_node}, {incoming_node}) already has " \
@@ -237,24 +226,23 @@ class DAG:
         # Ensure that no cycles will be created by adding this edge to the DAG.
         test_edges: list = graph_edges + [(outgoing_node, incoming_node)]
 
-        # Error Case 7: Both callables exist only once in the DAG,
+        # Error Case 6: Both callables exist only once in the DAG,
         # but adding an edge between them creates circular dependencies.
         if not _nx.is_directed_acyclic_graph(_nx.DiGraph(test_edges)):
             err_msg = f"Requested edge ({outgoing_node}, {incoming_node}) " \
-                    + "results in circular dependecies."
+                    + "results in circular dependencies."
             raise ValueError(err_msg)
 
         # We can now add the edge to the DAG, since we are certain it will not result in
         # illegal dependencies/behavior.
+        # First, we should account for potential new nodes. This also handles
+        # duplicates on first entry to the DAG (e.g.: edge == (print, print))
+        if new_callables.get(u_of_edge) != None:
+            outgoing_node = self.add_node(new_callables[u_of_edge])
+        if new_callables.get(v_of_edge) != None:
+            incoming_node = self.add_node(new_callables[v_of_edge])
 
-        # First, we should account for potential new nodes:
-        if new_callable == u_of_edge:
-            outgoing_node = self.add_node(u_of_edge)
-
-        elif new_callable == v_of_edge:
-            incoming_node = self.add_node(v_of_edge)
-
-        # Then we can add the new edge and re-evaluate the roots in our graph.
+        # Then we can add the new edge.
         self.graph.add_edge(outgoing_node, incoming_node, Condition = continue_on)
         return (outgoing_node, incoming_node)
     
@@ -280,6 +268,32 @@ class DAG:
 
     def update_edges(self, *E, continue_on: Condition, filter: _types.LambdaType = None, data = None):
         """
+        Flexible function to update properties of edges in the DAG's scope, 
+        based on unique identifier(s) (e.g.: string IDs or unique callables) or a
+        lambda filter using the edgedict syntax.
+        
+        List of nodes to update or filter argument is expected. Valid edge lists include:
+
+        \t update_edges((node1, node2), ...)       or update_edges([(node1, node2)], ...)
+
+        \t update_edges((node1, callable2), ...)   or update_edges([(node1, callable2)], ...)
+        
+        \t update_edges(edgedict),                 where isinstance(edgedict, webber.edges.edgedict) == True
+
+        Parameters:
+
+        > continue_on: webber.edges.Condition value to update matching edges with, 
+        
+        \t Execute child on success, failure, or any exit state, of the parent node
+
+        > filter: lambda property that can be used instead of a list of edges to be updated.
+        
+        \t filter = (lambda e: n.parent == print or e.child == print)
+
+        > data: If given, expects a dictionary or edgedict to update edge properties. Currently, only continue_on property should be set.
+
+        \t data = { 'continue_on': webber.edges.Condition }
+
         """
         if len(E) == 0 and filter == None:
             raise ValueError("Either an array of edge IDs / edgedicts (E) or a filter must be passed to this function.")
@@ -324,6 +338,11 @@ class DAG:
                     self.graph.edges[e]['Condition'] = continue_on
 
     def _update_edge(self, edgedict: dict, id: tuple[str, str] = None, force: bool = False):
+        """
+        Internal only. Update properties of an individual edge within a DAG's scope, 
+        given a well-structured dictionary and the tuple identifier of the network edge. 
+        Force argument bypasses validation, and should only be used internally.
+        """
         if id != None:
             try:
                 if edgedict.get('id') and id != edgedict['id']:
@@ -363,11 +382,64 @@ class DAG:
         edge = {k: v for k,v in edgedict.items() if k not in ('parent', 'child', 'id')}
         self.graph.edges[(edge_id[0], edge_id[1])].update(edge)
 
+    def relabel_node(self, node: _T.Union[str, _T.Callable], label: str):
+        """
+        Update the label, or name, given to a node in the DAG's scope, 
+        given a Python string and a node identifier. 
+        Well-structured wrapper for a common use-case of DAG.update_nodes.
+        """
+        node_id = self.node_id(node)
+        if not isinstance(label, str) or len(label) == 0:
+            err_msg = "Node label must be a Python string with one or more characters."
+            raise ValueError(err_msg)
+        self.update_nodes(node_id, data = {'name': label})
+        return label
+
     def update_nodes(self, *N, filter: _types.LambdaType = None, data = None, callable = None, args = None, kwargs = None):
         """
+        Flexible function to update properties of nodes in the DAG's scope, 
+        based on unique identifier(s) (e.g.: string IDs or unique callables) or a
+        lambda filter using the dotdict syntax.
+        
+        List of nodes to update or filter argument is expected. Valid node lists include:
+
+        \t update_nodes(node_id, ...)           or update_nodes([node_id], ...)
+
+        \t update_nodes(callable, ...)          or update_nodes([callable], ...)
+        
+        \t update_nodes(node1, node2, ...)      or update_nodes([node1, node2], ...)
+        
+        \t update_nodes(node1, callable2, ...)  or update_nodes([node1, callable2], ...)
+
+        > update_nodes(node_id, ...) is equivalent to update_nodes(filter = lambda n: n.id == node_id)
+
+        Parameters:
+
+        > filter: lambda property that can be used instead of a list of nodes to be updated.
+        
+        \t filter = (lambda n: n.callable == print or 'Hello, World' in n.args)
+
+        > data: If given, expects a dictionary or dotdict to update node properties. At least one property should be defined if data argument is set.
+            Any value given to the id key will be ignored. Allowed for ease of use with DAG.get nodes method.
+            
+        \t data = {
+            \t 'callable': print,
+            \t 'args': ['Hello', 'World'],
+            \t 'kwargs': {'sep': ', '},
+            \t 'name': 'custom_label',
+            \t 'id': 'unique-identifier'
+            \t}
+
+        > args: Positional arguments to be passed to matching callables in the DAG's scope, using a Python iterable (e.g.: Tuple or List).
+
+        > kwargs: Keyword arguments to be passed to matching callables in the DAG's scope, using a Python dictionary.
+
         """
         if len(N) == 0 and filter == None:
             raise ValueError("Either an array of node IDs or node data (N) or a filter must be passed to this function.")
+
+        elif len(N) > 0 and filter != None:
+            raise ValueError("Node data array (N) and filter argument are mutually exclusive, and cannot both be defined to identify nodes to update DAG's scope.")
 
         elif isinstance(N, dict) or isinstance(N, str):
             N = [N]
@@ -472,10 +544,6 @@ class DAG:
         """
         if len(N) == 0:
             node_data = list(self.graph.nodes.values())
-            # for i in range(len(node_data)):
-            #     _id = node_data[i][0]
-            #     node_data[i] = node_data[i][1]
-            #     node_data[i]['id'] = _id
             return [dotdict(d) for d in node_data]
 
         elif len(N) == 1:
@@ -483,8 +551,7 @@ class DAG:
                 N = N[0]
             else:
                 node_id = self.node_id(N[0])
-                node_data = dotdict(self.graph.nodes[node_id])
-                # node_data['id'] = node_id
+                node_data = [dotdict(self.graph.nodes[node_id])]
                 return node_data
             
         if not len(N) == len(set(N)):
@@ -493,8 +560,6 @@ class DAG:
         
         node_ids  = [self.node_id(n) for n in N]
         node_data = [dotdict(self.graph.nodes[n]) for n in node_ids]
-        # for i, _id in enumerate(node_ids):
-        #     node_data[i]['id'] = _id
         return node_data
 
     def filter_nodes(self, filter: _types.LambdaType, data: bool = False):
@@ -514,8 +579,8 @@ class DAG:
         Use get_edges for more flexible controls.
         """
         if not data:
-            return [e[:2] for e in list(self.graph.edges.data()) if filter(edgedict(e))]
-        return [edgedict(e) for e in list(self.graph.edges.data()) if filter(edgedict(e))]
+            return [e[:2] for e in list(self.graph.edges.data()) if filter(edgedict(*e))]
+        return [edgedict(e) for e in list(self.graph.edges.data()) if filter(edgedict(*e))]
 
     def retry_node(self, identifier: _T.Union[str,_T.Callable], count: int):
         """
@@ -630,6 +695,9 @@ class DAG:
     
     def _update_node(self, nodedict: dict, id: str = None, force: bool = False):
         """
+        Internal only. Update properties of single node within a DAG's scope, 
+        given a well-structured dictionary and the tuple identifier of the network edge. 
+        Force argument bypasses dictionary validation, and should only be used internally.
         """
         if id != None:
             try:
@@ -689,15 +757,16 @@ class DAG:
         subgraph = self.graph.subgraph(node_ids)
         return DAG(subgraph, __force=True)
 
-    def _validate_promise(self, promise: _xcoms.Promise) -> bool:
+    def resolve_promise(self, promise: _xcoms.Promise) -> _xcoms.Promise:
         """
-        Returns True if a given Promise is valid, based on the DAG's current scope.
-        Raises `webber.xcom.InvalidCallable` if Promise requests a callable that is out of scope.
+        Returns a Promise with a unique string identifier, if a given Promise is valid, based on the DAG's current scope.
+        Raises `webber.xcoms.InvalidCallable` if Promise requests a callable that is out of scope.
         """
-        if promise.key not in self.graph.nodes:
-            err_msg = f"Requested callable {promise.key} is not defined in DAG's scope."
-            raise _xcoms.InvalidCallable(err_msg)
-        return True
+        try:
+            key = self.node_id(promise.key)
+        except Exception as e:
+            raise _xcoms.InvalidCallable(e)
+        return _xcoms.Promise(key)
 
     def __init__(self, graph: _nx.DiGraph = None, **kwargs) -> None:
 
@@ -737,7 +806,14 @@ class DAG:
         Base class used to execute DAG in embarrassingly parallel.
         """
         def __init__(self, graph: _nx.DiGraph, roots: list, print_exc: bool = False) -> None:
+            
             with _OutputLogger(str(_uuid.uuid4()), "INFO", "root") as _:
+                
+                # Skip execution if there are no callables in scope.
+                if len(graph.nodes) == 0:
+                    print('Given DAG has no callables in scope. Skipping execution...')
+                    return
+
                 # Initialize local variables for execution.
                 complete, started, failed, skipped = set(), set(), set(), set()
                 events = set(roots)
@@ -864,3 +940,164 @@ class DAG:
                                     started.add(successor)
                         # Initialized nodes that are incomplete or not yet documented as complete.
                         events = started.difference(complete.union(failed).union(skipped))
+
+class QueueDAG(DAG):
+    """
+    #### Experimental, as of v0.2. ####
+
+    Directed Acyclic Graph used to queue and execute Pythonic callables in parallel,
+    while stringing the outputs of those callables in linear sequences.
+
+    Queue DAG nodes are repeated until the DAG executor completes or is killed, depending on the 
+    behavior of root nodes to determine if and/or when the DAG run has been completed.
+
+    Root nodes will be re-executed until culled by one of two conditions:
+    1. A max number of iterations has been completed, or
+    2. The output of the root node's callable matches a lambda halt_condition.
+
+    Both conditions can be set at run-time.
+
+    As of v0.2, QueueDAG experiences extreme latency when nested inside of a standard webber.DAG class.
+    """
+
+    conditions = {}
+
+    def __init__(self):
+        super().__init__()
+
+    def add_node(self, node, *args, **kwargs):
+        """
+        Adds a callable with positional and keyword arguments to the DAG's underlying graph.
+        On success, return unique identifier for the new node.
+        
+        Reserved key-words are used for Queue DAG definitions:
+        
+        - halt_condition: Lambda function used to halt repeated execution of a Queue DAG node that is independent of other callables.
+
+        \t halt_condition = (lambda output: output == None) 
+
+        - iterator: Discrete number of times that Queue DAG node should be executed. Meant to be mutually-exclusive of halt_condition argument.
+
+        - max_iter: Maximum number of times that Queue DAG node should be executed. Meant for use with halt_condition in order to prevent forever loop.
+        """
+        halt_condition = kwargs.pop('halt_condition', None)
+        iterator: int = kwargs.pop('iterator', None)
+        max_iter: int = kwargs.pop('max_iter', None)
+
+        return_val = super().add_node(node, *args, **kwargs)
+        
+        if max_iter != None:
+            iter_limit = int(max_iter)
+        elif iterator != None:
+            iter_limit = int(iterator)
+        else:
+            iter_limit = None
+        
+        self.conditions[return_val] = {
+            'halt_condition': halt_condition,
+            'iter_limit': iter_limit
+        }
+
+        return return_val
+        
+    def add_edge(self, u_of_edge, v_of_edge, continue_on = Condition.Success):
+        """
+        Adds an edge between nodes in the Queue DAG's underlying graph.
+        Queue DAG nodes may have a maximum of one child and one parent worker.
+        """
+        for node in (u_of_edge, v_of_edge):
+            try:
+                node_id = self.node_id(node)
+            except:
+                continue
+        
+            filter = (lambda e: e.parent == node_id) if node == u_of_edge else (lambda e: e.child == node_id)
+            try:
+                assert(len(self.filter_edges(filter)) == 0)
+            except Exception as e:
+                e.add_note("Queue DAG nodes may have a maximum of one child and one parent worker.")
+                raise e
+
+        return super().add_edge(u_of_edge, v_of_edge, continue_on)
+
+    def execute(self, *promises, return_ref=False, print_exc=False):
+        """
+        Basic wrapper for execution of the DAG's underlying callables.
+        """
+        queues = {}
+        processes = {}
+        join = set()
+        
+        promises: dict = { k: v for k, v in _it.pairwise(promises) } if len(promises) > 0 else {}
+
+        with _OutputLogger(str(_uuid.uuid4()), "INFO", "root") as _:
+
+            # Skip execution if there are no callables in scope.
+            if len(self.graph.nodes) == 0:
+                print('Given DAG has no callables in scope. Skipping execution...')
+                return
+
+            with _futures.ThreadPoolExecutor() as executor:
+
+                for id in self.root:
+                    node = self.get_node(id)
+                    queues[id] = _q.LifoQueue()
+                    node.update({
+                        'callable': _queue._worker,
+                        'args': tuple(),
+                        'kwargs': {
+                            'work': node.callable,
+                            'args': node.args, 'kwargs': node.kwargs,
+                            'promises': promises,
+                            'print_exc': print_exc,
+                            'halt_condition': self.conditions[id]['halt_condition'],
+                            'iter_limit': self.conditions[id]['iter_limit'],
+                            'out_queue': queues.get(id)
+                        }
+                    })
+                    processes[id] = executor.submit(
+                        _event_wrapper,
+                        _callable=node['callable'],
+                        _name=node['name'],
+                        _args=node['args'],
+                        _kwargs=node['kwargs']
+                    )
+                
+                for parent_id, id in self.graph.edges:
+                    node = self.get_node(id)
+                    queues[id] = _q.LifoQueue()
+                    if len(list(self.graph.successors(id))) == 0:
+                        end_proc = id
+                    node.update({
+                        'callable': _queue._worker,
+                        'args': tuple(),
+                        'kwargs': {
+                            'work': node.callable,
+                            'args': node.args, 'kwargs': node.kwargs,
+                            'promises': promises,
+                            'print_exc': print_exc,
+                            'parent_id': parent_id,
+                            'parent_process': processes[parent_id],
+                            'in_queue': queues.get(parent_id),
+                            'out_queue': queues.get(id)
+                        }
+                    })
+                    processes[id] = executor.submit(
+                        _event_wrapper,
+                        _callable=node['callable'],
+                        _name=node['name'],
+                        _args=node['args'],
+                        _kwargs=node['kwargs']
+                    )
+
+            
+            while len(join) != len(self.graph.nodes):
+                for node in self.graph.nodes:
+                    if processes[node].done():
+                        join.add(node)
+            
+            return_val = []
+            while not queues[end_proc].empty():
+                return_val.append(queues[end_proc].get())
+            
+            return return_val

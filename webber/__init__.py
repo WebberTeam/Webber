@@ -10,5 +10,5 @@ __supported__ = ("linux", "linux2", "win32")
 if _sys.platform not in __supported__:
     _logging.warn(f"Webber {__version__} is only supported on these platforms: {', '.join(__supported__)}")
 
-from .core import DAG, Condition
+from .core import DAG, Condition, QueueDAG
 from .xcoms import Promise

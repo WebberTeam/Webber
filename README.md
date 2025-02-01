@@ -83,6 +83,12 @@ This project has seen some major improvements since its inception. In 2024, we'v
 ## Project Roadmap:
 #### See our latest releases for an overview of what this module supports. Our next release(s) are expected to cover the following:
 
+#### *Added in Version 0.2:*
+- **QueueDAG**: Experimental support for DAGs where nodes are executed in parallel but node outputs are executed in sequence
+- webber.Promises now support use of callables as keys
+- Improved documentation and start-up guides
+- Bug fixes for core DAG functions and simplified codebase
+
 #### *Added in Version 0.1.2:*
 - Get/Update Functions for Nodes and Edges
 - Introductory Jupyter notebooks and documentation
@@ -92,6 +98,5 @@ This project has seen some major improvements since its inception. In 2024, we'v
 #### *Future Roadmap*:
 - Bug fixes and expanded documentation
 - Visualization module improvements for browsers
-- Expanded support for data science use-cases
 - Executor efficiency improvements (e.g.: covered node paths)
 - Successor and predecessor functions
