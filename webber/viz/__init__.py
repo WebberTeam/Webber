@@ -69,7 +69,11 @@ def annotate_node(node: dict):
             args.append(_json.dumps(a))
         except:
             if isinstance(a, _xcoms.Promise):
-                args.append(f'Promise({a.key.split('__')[0]})')
+                if isinstance(a.key, str):
+                    name = a.key.split('__')[0]
+                else:
+                    name = a.key.__name__
+                args.append(f'Promise({name})')
             else:
                 args.append(f'Object({str(a.__class__)})')
     for k,v in node['kwargs'].items():
@@ -79,7 +83,11 @@ def annotate_node(node: dict):
                 kwargs[_json.dumps(k)] = _json.dumps(v)
             except:
                 if isinstance(v, _xcoms.Promise):
-                    kwargs[k] = f"Promise('{v.key.split('__')[0]}')"
+                    if isinstance(v.key, str):
+                        name = v.key.split('__')[0]
+                    else:
+                        name = v.key.__name__
+                    kwargs[k] = f"Promise('{name}')"
                 else:
                     kwargs[k] = f'Object({str(v.__class__)})'
         except:

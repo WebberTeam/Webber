@@ -89,30 +89,32 @@ Uses <code>concurrent.futures.ThreadPoolExecutor</code> to maintain data as retu
 </span><span id="L-8"><a href="#L-8"><span class="linenos"> 8</span></a><span class="sd">&quot;&quot;&quot;</span>
 </span><span id="L-9"><a href="#L-9"><span class="linenos"> 9</span></a><span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;InvalidCallable&quot;</span><span class="p">,</span> <span class="s2">&quot;Promise&quot;</span><span class="p">]</span>
 </span><span id="L-10"><a href="#L-10"><span class="linenos">10</span></a>
-</span><span id="L-11"><a href="#L-11"><span class="linenos">11</span></a><span class="k">class</span> <span class="nc">InvalidCallable</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
-</span><span id="L-12"><a href="#L-12"><span class="linenos">12</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Requested Webber Promise is invalid in DAG&#39;s given scope/context.&quot;&quot;&quot;</span>
-</span><span id="L-13"><a href="#L-13"><span class="linenos">13</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
-</span><span id="L-14"><a href="#L-14"><span class="linenos">14</span></a>        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-</span><span id="L-15"><a href="#L-15"><span class="linenos">15</span></a>        <span class="k">if</span> <span class="n">args</span><span class="p">:</span>
-</span><span id="L-16"><a href="#L-16"><span class="linenos">16</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-</span><span id="L-17"><a href="#L-17"><span class="linenos">17</span></a>        <span class="k">else</span><span class="p">:</span>
-</span><span id="L-18"><a href="#L-18"><span class="linenos">18</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="kc">None</span>
-</span><span id="L-19"><a href="#L-19"><span class="linenos">19</span></a>
-</span><span id="L-20"><a href="#L-20"><span class="linenos">20</span></a>    <span class="k">def</span> <span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="L-21"><a href="#L-21"><span class="linenos">21</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">message</span><span class="p">:</span>
-</span><span id="L-22"><a href="#L-22"><span class="linenos">22</span></a>            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">message</span><span class="si">}</span><span class="s2">&quot;</span>
-</span><span id="L-23"><a href="#L-23"><span class="linenos">23</span></a>        <span class="k">return</span> <span class="s2">&quot;InvalidCallable&quot;</span>
-</span><span id="L-24"><a href="#L-24"><span class="linenos">24</span></a>
-</span><span id="L-25"><a href="#L-25"><span class="linenos">25</span></a>
-</span><span id="L-26"><a href="#L-26"><span class="linenos">26</span></a><span class="k">class</span> <span class="nc">Promise</span><span class="p">:</span>
-</span><span id="L-27"><a href="#L-27"><span class="linenos">27</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;A simple object class used to handle function intercoms for Webber&#39;s DAG executor.&quot;&quot;&quot;</span>
-</span><span id="L-28"><a href="#L-28"><span class="linenos">28</span></a>    <span class="n">key</span><span class="p">:</span> <span class="nb">str</span>
-</span><span id="L-29"><a href="#L-29"><span class="linenos">29</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="L-30"><a href="#L-30"><span class="linenos">30</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Initializing Promise using a function ID string (`webber.DAG.add_node`).&quot;&quot;&quot;</span>
-</span><span id="L-31"><a href="#L-31"><span class="linenos">31</span></a>        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_key</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
-</span><span id="L-32"><a href="#L-32"><span class="linenos">32</span></a>            <span class="n">err_msg</span> <span class="o">=</span> <span class="s2">&quot;Keys must be strings given by `webber.DAG.add_node`.&quot;</span>
-</span><span id="L-33"><a href="#L-33"><span class="linenos">33</span></a>            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="n">err_msg</span><span class="p">)</span>
-</span><span id="L-34"><a href="#L-34"><span class="linenos">34</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">key</span> <span class="o">=</span> <span class="n">_key</span>
+</span><span id="L-11"><a href="#L-11"><span class="linenos">11</span></a><span class="kn">import</span> <span class="nn">typing</span> <span class="k">as</span> <span class="nn">_T</span>
+</span><span id="L-12"><a href="#L-12"><span class="linenos">12</span></a>
+</span><span id="L-13"><a href="#L-13"><span class="linenos">13</span></a><span class="k">class</span> <span class="nc">InvalidCallable</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+</span><span id="L-14"><a href="#L-14"><span class="linenos">14</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Requested Webber Promise is invalid in DAG&#39;s given scope/context.&quot;&quot;&quot;</span>
+</span><span id="L-15"><a href="#L-15"><span class="linenos">15</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+</span><span id="L-16"><a href="#L-16"><span class="linenos">16</span></a>        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+</span><span id="L-17"><a href="#L-17"><span class="linenos">17</span></a>        <span class="k">if</span> <span class="n">args</span><span class="p">:</span>
+</span><span id="L-18"><a href="#L-18"><span class="linenos">18</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="L-19"><a href="#L-19"><span class="linenos">19</span></a>        <span class="k">else</span><span class="p">:</span>
+</span><span id="L-20"><a href="#L-20"><span class="linenos">20</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="L-21"><a href="#L-21"><span class="linenos">21</span></a>
+</span><span id="L-22"><a href="#L-22"><span class="linenos">22</span></a>    <span class="k">def</span> <span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="L-23"><a href="#L-23"><span class="linenos">23</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">message</span><span class="p">:</span>
+</span><span id="L-24"><a href="#L-24"><span class="linenos">24</span></a>            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">message</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="L-25"><a href="#L-25"><span class="linenos">25</span></a>        <span class="k">return</span> <span class="s2">&quot;InvalidCallable&quot;</span>
+</span><span id="L-26"><a href="#L-26"><span class="linenos">26</span></a>
+</span><span id="L-27"><a href="#L-27"><span class="linenos">27</span></a>
+</span><span id="L-28"><a href="#L-28"><span class="linenos">28</span></a><span class="k">class</span> <span class="nc">Promise</span><span class="p">:</span>
+</span><span id="L-29"><a href="#L-29"><span class="linenos">29</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;A simple object class used to handle function intercoms for Webber&#39;s DAG executor.&quot;&quot;&quot;</span>
+</span><span id="L-30"><a href="#L-30"><span class="linenos">30</span></a>    <span class="n">key</span><span class="p">:</span> <span class="n">_T</span><span class="o">.</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">_T</span><span class="o">.</span><span class="n">Callable</span><span class="p">]</span>
+</span><span id="L-31"><a href="#L-31"><span class="linenos">31</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_key</span><span class="p">:</span> <span class="n">_T</span><span class="o">.</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">_T</span><span class="o">.</span><span class="n">Callable</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="L-32"><a href="#L-32"><span class="linenos">32</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Initializing Promise using a function identifier (ID string or callable).&quot;&quot;&quot;</span>
+</span><span id="L-33"><a href="#L-33"><span class="linenos">33</span></a>        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_key</span><span class="p">,</span> <span class="n">_T</span><span class="o">.</span><span class="n">Callable</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_key</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+</span><span id="L-34"><a href="#L-34"><span class="linenos">34</span></a>            <span class="n">err_msg</span> <span class="o">=</span> <span class="s2">&quot;Keys must be string IDs or callables to be assigned to a Webber Promise&quot;</span>
+</span><span id="L-35"><a href="#L-35"><span class="linenos">35</span></a>            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="n">err_msg</span><span class="p">)</span>
+</span><span id="L-36"><a href="#L-36"><span class="linenos">36</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">key</span> <span class="o">=</span> <span class="n">_key</span>
 </span></pre></div>
 
 
@@ -128,19 +130,19 @@ Uses <code>concurrent.futures.ThreadPoolExecutor</code> to maintain data as retu
 
     </div>
     <a class="headerlink" href="#InvalidCallable"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="InvalidCallable-12"><a href="#InvalidCallable-12"><span class="linenos">12</span></a><span class="k">class</span> <span class="nc">InvalidCallable</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
-</span><span id="InvalidCallable-13"><a href="#InvalidCallable-13"><span class="linenos">13</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Requested Webber Promise is invalid in DAG&#39;s given scope/context.&quot;&quot;&quot;</span>
-</span><span id="InvalidCallable-14"><a href="#InvalidCallable-14"><span class="linenos">14</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
-</span><span id="InvalidCallable-15"><a href="#InvalidCallable-15"><span class="linenos">15</span></a>        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-</span><span id="InvalidCallable-16"><a href="#InvalidCallable-16"><span class="linenos">16</span></a>        <span class="k">if</span> <span class="n">args</span><span class="p">:</span>
-</span><span id="InvalidCallable-17"><a href="#InvalidCallable-17"><span class="linenos">17</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-</span><span id="InvalidCallable-18"><a href="#InvalidCallable-18"><span class="linenos">18</span></a>        <span class="k">else</span><span class="p">:</span>
-</span><span id="InvalidCallable-19"><a href="#InvalidCallable-19"><span class="linenos">19</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="kc">None</span>
-</span><span id="InvalidCallable-20"><a href="#InvalidCallable-20"><span class="linenos">20</span></a>
-</span><span id="InvalidCallable-21"><a href="#InvalidCallable-21"><span class="linenos">21</span></a>    <span class="k">def</span> <span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="InvalidCallable-22"><a href="#InvalidCallable-22"><span class="linenos">22</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">message</span><span class="p">:</span>
-</span><span id="InvalidCallable-23"><a href="#InvalidCallable-23"><span class="linenos">23</span></a>            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">message</span><span class="si">}</span><span class="s2">&quot;</span>
-</span><span id="InvalidCallable-24"><a href="#InvalidCallable-24"><span class="linenos">24</span></a>        <span class="k">return</span> <span class="s2">&quot;InvalidCallable&quot;</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="InvalidCallable-14"><a href="#InvalidCallable-14"><span class="linenos">14</span></a><span class="k">class</span> <span class="nc">InvalidCallable</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+</span><span id="InvalidCallable-15"><a href="#InvalidCallable-15"><span class="linenos">15</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Requested Webber Promise is invalid in DAG&#39;s given scope/context.&quot;&quot;&quot;</span>
+</span><span id="InvalidCallable-16"><a href="#InvalidCallable-16"><span class="linenos">16</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+</span><span id="InvalidCallable-17"><a href="#InvalidCallable-17"><span class="linenos">17</span></a>        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+</span><span id="InvalidCallable-18"><a href="#InvalidCallable-18"><span class="linenos">18</span></a>        <span class="k">if</span> <span class="n">args</span><span class="p">:</span>
+</span><span id="InvalidCallable-19"><a href="#InvalidCallable-19"><span class="linenos">19</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="InvalidCallable-20"><a href="#InvalidCallable-20"><span class="linenos">20</span></a>        <span class="k">else</span><span class="p">:</span>
+</span><span id="InvalidCallable-21"><a href="#InvalidCallable-21"><span class="linenos">21</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="InvalidCallable-22"><a href="#InvalidCallable-22"><span class="linenos">22</span></a>
+</span><span id="InvalidCallable-23"><a href="#InvalidCallable-23"><span class="linenos">23</span></a>    <span class="k">def</span> <span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="InvalidCallable-24"><a href="#InvalidCallable-24"><span class="linenos">24</span></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">message</span><span class="p">:</span>
+</span><span id="InvalidCallable-25"><a href="#InvalidCallable-25"><span class="linenos">25</span></a>            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">message</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="InvalidCallable-26"><a href="#InvalidCallable-26"><span class="linenos">26</span></a>        <span class="k">return</span> <span class="s2">&quot;InvalidCallable&quot;</span>
 </span></pre></div>
 
 
@@ -158,12 +160,12 @@ Uses <code>concurrent.futures.ThreadPoolExecutor</code> to maintain data as retu
 
     </div>
     <a class="headerlink" href="#InvalidCallable.__init__"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="InvalidCallable.__init__-14"><a href="#InvalidCallable.__init__-14"><span class="linenos">14</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
-</span><span id="InvalidCallable.__init__-15"><a href="#InvalidCallable.__init__-15"><span class="linenos">15</span></a>        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-</span><span id="InvalidCallable.__init__-16"><a href="#InvalidCallable.__init__-16"><span class="linenos">16</span></a>        <span class="k">if</span> <span class="n">args</span><span class="p">:</span>
-</span><span id="InvalidCallable.__init__-17"><a href="#InvalidCallable.__init__-17"><span class="linenos">17</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-</span><span id="InvalidCallable.__init__-18"><a href="#InvalidCallable.__init__-18"><span class="linenos">18</span></a>        <span class="k">else</span><span class="p">:</span>
-</span><span id="InvalidCallable.__init__-19"><a href="#InvalidCallable.__init__-19"><span class="linenos">19</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="kc">None</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="InvalidCallable.__init__-16"><a href="#InvalidCallable.__init__-16"><span class="linenos">16</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+</span><span id="InvalidCallable.__init__-17"><a href="#InvalidCallable.__init__-17"><span class="linenos">17</span></a>        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+</span><span id="InvalidCallable.__init__-18"><a href="#InvalidCallable.__init__-18"><span class="linenos">18</span></a>        <span class="k">if</span> <span class="n">args</span><span class="p">:</span>
+</span><span id="InvalidCallable.__init__-19"><a href="#InvalidCallable.__init__-19"><span class="linenos">19</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="InvalidCallable.__init__-20"><a href="#InvalidCallable.__init__-20"><span class="linenos">20</span></a>        <span class="k">else</span><span class="p">:</span>
+</span><span id="InvalidCallable.__init__-21"><a href="#InvalidCallable.__init__-21"><span class="linenos">21</span></a>            <span class="bp">self</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="kc">None</span>
 </span></pre></div>
 
 
@@ -193,15 +195,15 @@ Uses <code>concurrent.futures.ThreadPoolExecutor</code> to maintain data as retu
 
     </div>
     <a class="headerlink" href="#Promise"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="Promise-27"><a href="#Promise-27"><span class="linenos">27</span></a><span class="k">class</span> <span class="nc">Promise</span><span class="p">:</span>
-</span><span id="Promise-28"><a href="#Promise-28"><span class="linenos">28</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;A simple object class used to handle function intercoms for Webber&#39;s DAG executor.&quot;&quot;&quot;</span>
-</span><span id="Promise-29"><a href="#Promise-29"><span class="linenos">29</span></a>    <span class="n">key</span><span class="p">:</span> <span class="nb">str</span>
-</span><span id="Promise-30"><a href="#Promise-30"><span class="linenos">30</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="Promise-31"><a href="#Promise-31"><span class="linenos">31</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Initializing Promise using a function ID string (`webber.DAG.add_node`).&quot;&quot;&quot;</span>
-</span><span id="Promise-32"><a href="#Promise-32"><span class="linenos">32</span></a>        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_key</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
-</span><span id="Promise-33"><a href="#Promise-33"><span class="linenos">33</span></a>            <span class="n">err_msg</span> <span class="o">=</span> <span class="s2">&quot;Keys must be strings given by `webber.DAG.add_node`.&quot;</span>
-</span><span id="Promise-34"><a href="#Promise-34"><span class="linenos">34</span></a>            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="n">err_msg</span><span class="p">)</span>
-</span><span id="Promise-35"><a href="#Promise-35"><span class="linenos">35</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">key</span> <span class="o">=</span> <span class="n">_key</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="Promise-29"><a href="#Promise-29"><span class="linenos">29</span></a><span class="k">class</span> <span class="nc">Promise</span><span class="p">:</span>
+</span><span id="Promise-30"><a href="#Promise-30"><span class="linenos">30</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;A simple object class used to handle function intercoms for Webber&#39;s DAG executor.&quot;&quot;&quot;</span>
+</span><span id="Promise-31"><a href="#Promise-31"><span class="linenos">31</span></a>    <span class="n">key</span><span class="p">:</span> <span class="n">_T</span><span class="o">.</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">_T</span><span class="o">.</span><span class="n">Callable</span><span class="p">]</span>
+</span><span id="Promise-32"><a href="#Promise-32"><span class="linenos">32</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_key</span><span class="p">:</span> <span class="n">_T</span><span class="o">.</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">_T</span><span class="o">.</span><span class="n">Callable</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="Promise-33"><a href="#Promise-33"><span class="linenos">33</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Initializing Promise using a function identifier (ID string or callable).&quot;&quot;&quot;</span>
+</span><span id="Promise-34"><a href="#Promise-34"><span class="linenos">34</span></a>        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_key</span><span class="p">,</span> <span class="n">_T</span><span class="o">.</span><span class="n">Callable</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_key</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+</span><span id="Promise-35"><a href="#Promise-35"><span class="linenos">35</span></a>            <span class="n">err_msg</span> <span class="o">=</span> <span class="s2">&quot;Keys must be string IDs or callables to be assigned to a Webber Promise&quot;</span>
+</span><span id="Promise-36"><a href="#Promise-36"><span class="linenos">36</span></a>            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="n">err_msg</span><span class="p">)</span>
+</span><span id="Promise-37"><a href="#Promise-37"><span class="linenos">37</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">key</span> <span class="o">=</span> <span class="n">_key</span>
 </span></pre></div>
 
 
@@ -213,29 +215,29 @@ Uses <code>concurrent.futures.ThreadPoolExecutor</code> to maintain data as retu
                                         <input id="Promise.__init__-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
-        <span class="name">Promise</span><span class="signature pdoc-code condensed">(<span class="param"><span class="n">_key</span><span class="p">:</span> <span class="nb">str</span></span>)</span>
+        <span class="name">Promise</span><span class="signature pdoc-code condensed">(<span class="param"><span class="n">_key</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Callable</span><span class="p">]</span></span>)</span>
 
                 <label class="view-source-button" for="Promise.__init__-view-source"><span>View Source</span></label>
 
     </div>
     <a class="headerlink" href="#Promise.__init__"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="Promise.__init__-30"><a href="#Promise.__init__-30"><span class="linenos">30</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="Promise.__init__-31"><a href="#Promise.__init__-31"><span class="linenos">31</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Initializing Promise using a function ID string (`webber.DAG.add_node`).&quot;&quot;&quot;</span>
-</span><span id="Promise.__init__-32"><a href="#Promise.__init__-32"><span class="linenos">32</span></a>        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_key</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
-</span><span id="Promise.__init__-33"><a href="#Promise.__init__-33"><span class="linenos">33</span></a>            <span class="n">err_msg</span> <span class="o">=</span> <span class="s2">&quot;Keys must be strings given by `webber.DAG.add_node`.&quot;</span>
-</span><span id="Promise.__init__-34"><a href="#Promise.__init__-34"><span class="linenos">34</span></a>            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="n">err_msg</span><span class="p">)</span>
-</span><span id="Promise.__init__-35"><a href="#Promise.__init__-35"><span class="linenos">35</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">key</span> <span class="o">=</span> <span class="n">_key</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="Promise.__init__-32"><a href="#Promise.__init__-32"><span class="linenos">32</span></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_key</span><span class="p">:</span> <span class="n">_T</span><span class="o">.</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">_T</span><span class="o">.</span><span class="n">Callable</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="Promise.__init__-33"><a href="#Promise.__init__-33"><span class="linenos">33</span></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Initializing Promise using a function identifier (ID string or callable).&quot;&quot;&quot;</span>
+</span><span id="Promise.__init__-34"><a href="#Promise.__init__-34"><span class="linenos">34</span></a>        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_key</span><span class="p">,</span> <span class="n">_T</span><span class="o">.</span><span class="n">Callable</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_key</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+</span><span id="Promise.__init__-35"><a href="#Promise.__init__-35"><span class="linenos">35</span></a>            <span class="n">err_msg</span> <span class="o">=</span> <span class="s2">&quot;Keys must be string IDs or callables to be assigned to a Webber Promise&quot;</span>
+</span><span id="Promise.__init__-36"><a href="#Promise.__init__-36"><span class="linenos">36</span></a>            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="n">err_msg</span><span class="p">)</span>
+</span><span id="Promise.__init__-37"><a href="#Promise.__init__-37"><span class="linenos">37</span></a>        <span class="bp">self</span><span class="o">.</span><span class="n">key</span> <span class="o">=</span> <span class="n">_key</span>
 </span></pre></div>
 
 
-            <div class="docstring"><p>Initializing Promise using a function ID string (<code>webber.DAG.add_node</code>).</p>
+            <div class="docstring"><p>Initializing Promise using a function identifier (ID string or callable).</p>
 </div>
 
 
                             </div>
                             <div id="Promise.key" class="classattr">
                                 <div class="attr variable">
-            <span class="name">key</span><span class="annotation">: str</span>
+            <span class="name">key</span><span class="annotation">: Union[str, Callable]</span>
 
         
     </div>
