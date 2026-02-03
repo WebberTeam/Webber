@@ -31,14 +31,29 @@ Once Webber is installed, we recommend going through the following Jupyter noteb
 2. [Using Promises in Webber](./notebooks/more-dag-tests.ipynb)
 3. [Conditional Execution and Skips in Webber](./notebooks/skip-dags.ipynb)
 
-From there, you can reference the other examples in this repository for your specific use-case and experimentation. 
+From there, you can reference the other examples in this repository for your specific use-case and experimentation.
 
-Some of our favorites examples:
-- [XComs in Webber](./code/dag_xcoms.py)
-- [Complex Use of Promises in Webber](./code/dag_complex.py)
-- [Node Getters in Webber](./code/dag_get_nodes.py)
+## Code Examples by Feature
 
-2024.10.11: We're still building this section out. We are actively accepting feedback and help in writing documentation and testing edge cases.
+### Basic DAG & Promises
+- [dag_xcoms.py](./code/dag_xcoms.py) - Promise-based data passing between nodes
+- [dag_complex.py](./code/dag_complex.py) - Complex Promise usage patterns
+- [dag_get_nodes.py](./code/dag_get_nodes.py) - Node getters and filtering
+- [dag_latency.py](./code/dag_latency.py) - Performance comparison vs sequential execution
+
+### Error Handling & Retry
+- [dag_error_handling.py](./code/dag_error_handling.py) - Conditional edges (Success/Failure/AnyCase)
+- [dag_retry.py](./code/dag_retry.py) - Automatic retry on failure
+
+### QueueDAG (Iterative Workflows)
+- [queue_dag.py](./code/queue_dag.py) - Basic QueueDAG with iterator
+- [queuedag_halt.py](./code/queuedag_halt.py) - Halt condition to stop on criteria
+- [nested_queue.py](./code/nested_queue.py) - Nesting QueueDAG inside standard DAG
+
+### Visualization
+- [dag_viz.py](./code/dag_viz.py) - DAG visualization examples
+
+We are actively accepting feedback and help in writing documentation and testing edge cases.
 
 ## Advanced Readings:
 
@@ -46,7 +61,7 @@ Referencing [Apache Airflow's](https://airflow.apache.org/docs/apache-airflow/st
 - [Airflow Architecture Overview](https://airflow.apache.org/docs/apache-airflow/stable/core-concepts/overview.html)
 - [Airflow Core Concepts](https://airflow.apache.org/docs/apache-airflow/stable/core-concepts/dags.html)
 
-For those with an academic interest in DAGs and dyanmic programming, we recommend a few advanced readings:
+For those with an academic interest in DAGs and dynamic programming, we recommend a few advanced readings:
 
 - [Lecture Notes from Dr. Qing Zhao @ UCLA](http://www.stat.ucla.edu/~zhou/index.html)
 - [Zhao et. al - DAG Scheduling and Analysis on Multiprocessor Systems](https://eprints.whiterose.ac.uk/167629/1/rtss2020_dag.pdf)
