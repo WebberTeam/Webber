@@ -10,12 +10,18 @@ import webber.xcoms as _xcoms
 
 __all__ = []
 
-def _worker(work: _T.Callable, args, kwargs: dict, promises: dict = {}, print_exc = False,
-           parent_id: str = None, parent_process: _futures.Future = None, in_queue: _q.LifoQueue = None,
-           halt_condition: _T.Callable = None, iter_limit: int = None, out_queue: _q.LifoQueue = None):
+def _worker(work: _T.Callable, args: _T.Tuple[_T.Any, ...] | _T.List[_T.Any], kwargs: _T.Dict[str, _T.Any],
+           promises: _T.Dict[str, _T.Any] | None = None, print_exc: bool = False,
+           parent_id: str | None = None, parent_process: _futures.Future[_T.Any] | None = None,
+           in_queue: _q.LifoQueue[_T.Any] | None = None,
+           halt_condition: _T.Callable[[_T.Any], bool] | None = None, iter_limit: int | None = None,
+           out_queue: _q.LifoQueue[_T.Any] | None = None) -> None:
 
     try:
-        
+        # Handle mutable default
+        if promises is None:
+            promises = {}
+
         args = list(args)
 
         for i in range(len(args)):
@@ -30,17 +36,17 @@ def _worker(work: _T.Callable, args, kwargs: dict, promises: dict = {}, print_ex
 
         iter_count = 0
 
-        while iter_limit == None or (iter_count < iter_limit):
+        while iter_limit is None or (iter_count < iter_limit):
             
             # For child processes, get latest value from the queue.
             # If none are available and parent process is complete, break.
-            if in_queue != None:
+            if in_queue is not None:
                 try:
                     output = in_queue.get_nowait()
                 except Exception as e:
                     if not in_queue.empty():
                         raise e
-                    elif parent_process.done():
+                    elif parent_process is not None and parent_process.done():
                         break
                     continue
                     
@@ -56,13 +62,13 @@ def _worker(work: _T.Callable, args, kwargs: dict, promises: dict = {}, print_ex
 
             # Execute unit of work, and push output to queue, if given.
             x = work(*args, **kwargs)
-            if out_queue != None:
+            if out_queue is not None:
                 out_queue.put(x)
             
             iter_count += 1
             
             # Check halt conditions for root process (output-based lambda or iteration limit).
-            if halt_condition != None and halt_condition(x):
+            if halt_condition is not None and halt_condition(x):
                 break
 
     except Exception as e:

@@ -1,7 +1,5 @@
 """
 Visualization library for Webber DAGs.
-
-Last updated by: Jan 22, 2024 (v0.0.2)
 """
 import sys as _sys
 import json as _json
@@ -11,19 +9,23 @@ import typing as _typing
 import flask as _flask
 import networkx as _nx
 import webber.xcoms as _xcoms
-import matplotlib.pyplot as _plt
 from webber.edges import Condition
+from jinja2 import Environment as _Environment, FileSystemLoader as _FileSystemLoader
+
+# Wait for preload thread to finish to avoid circular imports with matplotlib/IPython
+# Uses non-blocking check first; only blocks if preload is still running
+import webber as _webber
+if not _webber._viz_ready.is_set():
+    _webber.wait_for_viz_ready(timeout=3.0)
+
+import matplotlib.pyplot as _plt
 from pyvis.network import Network as _Network
 from netgraph import InteractiveGraph as _IGraph
-# from PyQt6.QtWidgets import QApplication as _QApplication
-# from PyQt6.QtWebEngineCore import QWebEnginePage as _QWebEnginePage
-# from PyQt6.QtWebEngineWidgets import QWebEngineView as _QWebEngineView
-
 from jinja2 import Environment as _Environment, FileSystemLoader as _FileSystemLoader
 
 __all__ = ["generate_pyvis_network", "visualize_plt", "visualize_browser"]
 
-edge_colors: dict[Condition, str] = {
+edge_colors: _typing.Dict[Condition, str] = {
     Condition.Success: 'grey',
     Condition.AnyCase: 'blue',
     Condition.Failure: 'red'
@@ -31,7 +33,7 @@ edge_colors: dict[Condition, str] = {
 
 def edge_color(c: Condition):
     """
-    Given a Webber Condition, return corresponding color for edge visualizations. 
+    Given a Webber Condition, return corresponding color for edge visualizations.
     """
     return edge_colors[c]
 
@@ -50,7 +52,7 @@ def node_color(c: _typing.Callable):
             return '#DCDCAF'
     return '#AADAFB'
 
-def get_layers(graph: _nx.DiGraph) -> list[list[str]]:
+def get_layers(graph: _nx.DiGraph) -> _typing.List[_typing.List[str]]:
     """
     Generates ordered list of node identifiers given a directed network graph.
     """
@@ -59,7 +61,7 @@ def get_layers(graph: _nx.DiGraph) -> list[list[str]]:
         layers.append(nodes)
     return layers
 
-def annotate_node(node: dict):
+def annotate_node(node: _typing.Dict[str, _typing.Any]) -> str:
     """
     Given a Webber node, construct an annotation to be used in graph visualizations.
     """
@@ -105,17 +107,33 @@ def annotate_node(node: dict):
 
     return node_title
 
-def visualize_plt(graph: _nx.DiGraph, interactive=True) -> _IGraph:
+def visualize_plt(
+    graph: _nx.DiGraph,
+    interactive: bool = True,
+    optimize_layout: bool = True
+) -> _IGraph:
     """
     Generates basic network for visualization using the NetGraph library.
+
+    Args:
+        graph: NetworkX DiGraph to visualize
+        interactive: If True, enables interactive mode in notebooks.
+                     Ignored when using non-interactive backend (Agg).
+        optimize_layout: If True, reduces edge crossings (slower but prettier).
+                         Set to False for faster rendering on large graphs.
     """
-    if _in_notebook() and interactive:
+    # Check if we're using a non-interactive backend
+    import matplotlib
+    backend = matplotlib.get_backend().lower()
+    is_interactive_backend = backend not in ('agg', 'pdf', 'svg', 'ps', 'cairo')
+
+    if _in_notebook() and interactive and is_interactive_backend:
         _plt.ion()
         _plt.close()
     return _IGraph(
         graph, arrows=True, node_shape='o', node_size=5,
         node_layout='multipartite',
-        node_layout_kwargs=dict(layers=get_layers(graph), reduce_edge_crossings=True),
+        node_layout_kwargs=dict(layers=get_layers(graph), reduce_edge_crossings=optimize_layout),
         node_labels={id: c.__name__ for id,c in graph.nodes.data(data='callable')},
         node_color={id: node_color(c) for id,c in graph.nodes.data(data='callable')},
         edge_color={e[:-1]: edge_color(e[-1]) for e in graph.edges.data(data='Condition')},
@@ -156,7 +174,7 @@ def generate_pyvis_network(graph: _nx.DiGraph) -> _Network:
     for source_edge, dest_edge in graph.edges:
         condition: Condition = graph.edges.get((source_edge, dest_edge))['Condition']
         network.add_edge(source_edge, dest_edge, color=edge_color(condition))
-    
+
     return network
 
 
@@ -234,11 +252,6 @@ def generate_vis_html(graph: _nx.DiGraph) -> str:
         err_msg = "Empty JavaScript string given for Vis.js visualization."
         raise RuntimeError(err_msg)
 
-    # Invalid JavaScript check:
-    # if not (script):
-        # err_msg = "Invalid JavaScript string for Vis.js visualization."
-        # raise RuntimeError(err_msg)
-
     script = """<script type="text/javascript">\n""" + script + """</script>\n"""
 
     root = _path.dirname(_path.abspath(__file__))
@@ -255,7 +268,7 @@ def visualize_browser(graph: _nx.DiGraph):
     """
     Visualizes Network graphs using a Flask app served to a desktop browser.
     """
-    if _sys.platform not in ['darwin', 'win32', 'linux', 'linxu2']:
+    if _sys.platform not in ['darwin', 'win32', 'linux', 'linux2']:
         err_msg = "Unknown/unsupported operating system for GUI visualizations."
         raise RuntimeError(err_msg)
 
@@ -276,7 +289,7 @@ def _in_notebook() -> bool:
     if visualization type is not specified.
     """
     try:
-        from IPython import get_ipython
+        from IPython.core.getipython import get_ipython
         if 'IPKernelApp' not in get_ipython().config:
             return False
     except ImportError:
@@ -284,28 +297,3 @@ def _in_notebook() -> bool:
     except AttributeError:
         return False
     return True
-
-# def visualize_gui(graph: _nx.DiGraph):
-#     """
-#     Visualizes Network graphs using a desktop GUI generated by the PyQt6 library.
-#     """
-#     if sys.platform not in ['darwin', 'win32', 'linux', 'linxu2']:
-#         err_msg = "Unknown/unsupported operating system for GUI visualizations."
-#         raise RuntimeError(err_msg)
-
-#     gui_html = generate_vis_html(graph)
-
-#     class WebEngineView(_QWebEngineView):
-#         """
-#         A small Qt-based WebEngineView to generate a GUI using embedded HTML and JavaScript.
-#         """
-#         def __init__(self, parent=None):
-#             super().__init__(parent)
-#             self.webpage = _QWebEnginePage()
-#             self.setPage(self.webpage)
-#             self.webpage.setHtml(gui_html)
-
-#     app = _QApplication([])
-#     web_engine_view = WebEngineView()
-#     web_engine_view.showNormal()
-#     app.exec()
