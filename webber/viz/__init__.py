@@ -59,7 +59,7 @@ def get_layers(graph: _nx.DiGraph) -> _typing.List[_typing.List[str]]:
         layers.append(nodes)
     return layers
 
-def annotate_node(node: dict):
+def annotate_node(node: _typing.Dict[str, _typing.Any]) -> str:
     """
     Given a Webber node, construct an annotation to be used in graph visualizations.
     """
@@ -105,17 +105,33 @@ def annotate_node(node: dict):
 
     return node_title
 
-def visualize_plt(graph: _nx.DiGraph, interactive=True) -> _IGraph:
+def visualize_plt(
+    graph: _nx.DiGraph,
+    interactive: bool = True,
+    optimize_layout: bool = True
+) -> _IGraph:
     """
     Generates basic network for visualization using the NetGraph library.
+
+    Args:
+        graph: NetworkX DiGraph to visualize
+        interactive: If True, enables interactive mode in notebooks.
+                     Ignored when using non-interactive backend (Agg).
+        optimize_layout: If True, reduces edge crossings (slower but prettier).
+                         Set to False for faster rendering on large graphs.
     """
-    if _in_notebook() and interactive:
+    # Check if we're using a non-interactive backend
+    import matplotlib
+    backend = matplotlib.get_backend().lower()
+    is_interactive_backend = backend not in ('agg', 'pdf', 'svg', 'ps', 'cairo')
+
+    if _in_notebook() and interactive and is_interactive_backend:
         _plt.ion()
         _plt.close()
     return _IGraph(
         graph, arrows=True, node_shape='o', node_size=5,
         node_layout='multipartite',
-        node_layout_kwargs=dict(layers=get_layers(graph), reduce_edge_crossings=True),
+        node_layout_kwargs=dict(layers=get_layers(graph), reduce_edge_crossings=optimize_layout),
         node_labels={id: c.__name__ for id,c in graph.nodes.data(data='callable')},
         node_color={id: node_color(c) for id,c in graph.nodes.data(data='callable')},
         edge_color={e[:-1]: edge_color(e[-1]) for e in graph.edges.data(data='Condition')},
@@ -276,7 +292,7 @@ def _in_notebook() -> bool:
     if visualization type is not specified.
     """
     try:
-        from IPython import get_ipython
+        from IPython.core.getipython import get_ipython
         if 'IPKernelApp' not in get_ipython().config:
             return False
     except ImportError:

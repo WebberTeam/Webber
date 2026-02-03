@@ -12,14 +12,14 @@ import typing as _T
 
 class InvalidCallable(Exception):
     """Requested Webber Promise is invalid in DAG's given scope/context."""
-    def __init__(self, *args):
+    def __init__(self, *args: _T.Any) -> None:
         super().__init__()
         if args:
             self.message = args[0]
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         return "InvalidCallable"

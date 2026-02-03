@@ -2,11 +2,14 @@
 Helper class for edge and DAG validation logic.
 """
 import typing as _T
-import uuid as _uuid
+import itertools as _itertools
 import networkx as _nx
 import enum as _enum
 
 __all__ = ["valid_node", "valid_nodes", "valid_dag", "validate_nodes", "label_node"]
+
+# Fast counter-based ID generation (faster than uuid4)
+_id_counter = _itertools.count()
 
 class Condition(_enum.IntEnum):
     """Represents edge condition for a node execution, based on outcome(s) of predecessor(s)."""
@@ -22,40 +25,38 @@ class dotdict(dict):
 
 class edgedict(dotdict):
     super(dotdict)
-    def __init__(self, *E, **kwargs):
+    def __init__(self, *E: _T.Any, **kwargs: _T.Any) -> None:
         super().__init__({'parent': E[0], 'child': E[1], 'id': E[:2]})
         self.update(kwargs)
 
-def continue_on_failure(edge: dict) -> bool:
+def continue_on_failure(edge: _T.Dict[str, _T.Any]) -> bool:
     """Check edge condition for whether to continue on parent node's failure."""
     return edge['Condition'] in (Condition.Failure, Condition.AnyCase)
 
-def continue_on_success(edge: dict) -> bool:
+def continue_on_success(edge: _T.Dict[str, _T.Any]) -> bool:
     """Check edge condition for whether to continue on parent node's success."""
     return edge['Condition'] in (Condition.Success, Condition.AnyCase)
 
 def label_node(node: _T.Callable) -> str:
     """Generates unique identifiers for Python callables in a DAG."""
-    return f"{node.__name__}__{_uuid.uuid4()}"
+    return f"{node.__name__}__{next(_id_counter):08x}"
 
-def get_root(graph: _nx.DiGraph) -> list:
-    """Given a network graph, return list of all nodes without incoming edges or dependencies."""
-    return list(filter(
-        lambda node: len(list(graph.predecessors(node))) < 1,
-        graph.nodes.keys()
-    ))
+def get_root(graph: _nx.DiGraph) -> _T.List[str]:
+    """Given a network graph, return list of all nodes without incoming edges or dependencies.
+    Uses O(1) in_degree() instead of O(k) predecessors list creation."""
+    return [node for node in graph.nodes if graph.in_degree(node) == 0]
 
 # TODO: Refactor logic for DAG and node validation.
 
-def valid_node(node: _T.Union[str, _T.Callable]) -> bool:
+def valid_node(node: str | _T.Callable) -> bool:
     """Check whether given identifier represents a valid node (string or callable)."""
     return (isinstance(node,str) or callable(node))
 
-def valid_nodes(u_of_edge: _T.Union[str, _T.Callable], v_of_edge: _T.Union[str, _T.Callable]) -> bool:
+def valid_nodes(u_of_edge: str | _T.Callable, v_of_edge: str | _T.Callable) -> bool:
     """Check whether parent and child nodes represent valid nodes (string or callable)."""
     return valid_node(u_of_edge) and valid_node(v_of_edge)
 
-def validate_nodes(u_of_edge: _T.Union[str, _T.Callable], v_of_edge: _T.Union[str, _T.Callable]) -> True:
+def validate_nodes(u_of_edge: str | _T.Callable, v_of_edge: str | _T.Callable) -> bool:
     """
     Given parent and child identifiers, validate that both represent valid nodes.
     Otherwise raise exceptions.
@@ -63,11 +64,11 @@ def validate_nodes(u_of_edge: _T.Union[str, _T.Callable], v_of_edge: _T.Union[st
     if not valid_node(u_of_edge):
         err_msg = f"Outgoing node {u_of_edge} must be a string or a Python callable"
         raise TypeError(err_msg)
-    
+
     if not valid_node(v_of_edge):
         err_msg = f"Incoming node {v_of_edge} must be a string or a Python callable"
         raise TypeError(err_msg)
-    
+
     return True
 
 def valid_dag(graph: _nx.Graph) -> bool:
@@ -78,7 +79,7 @@ def valid_dag(graph: _nx.Graph) -> bool:
     return (
         isinstance(graph, _nx.Graph) and
         _nx.is_directed_acyclic_graph(graph) and
-        all(callable(node) for node in graph.nodes.keys())
+        all(callable(node) for node in graph.nodes)
     )
 
 
@@ -91,7 +92,7 @@ def validate_dag(graph: _nx.DiGraph) -> None:
         err_msg = f"Directed graph must be defined as type {_nx.DiGraph.__name__}"
         raise TypeError(err_msg)
 
-    if set(map(callable, list(graph.nodes.keys()))).issuperset({False}):
+    if any(not callable(node) for node in graph.nodes):
         err_msg = "All registered nodes must be callable Python functions."
         raise TypeError(err_msg)
 
