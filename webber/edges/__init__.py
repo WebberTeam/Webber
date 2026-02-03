@@ -2,14 +2,11 @@
 Helper class for edge and DAG validation logic.
 """
 import typing as _T
-import itertools as _itertools
+import uuid as _uuid
 import networkx as _nx
 import enum as _enum
 
 __all__ = ["valid_node", "valid_nodes", "valid_dag", "validate_nodes", "label_node"]
-
-# Fast counter-based ID generation (faster than uuid4)
-_id_counter = _itertools.count()
 
 class Condition(_enum.IntEnum):
     """Represents edge condition for a node execution, based on outcome(s) of predecessor(s)."""
@@ -38,8 +35,8 @@ def continue_on_success(edge: _T.Dict[str, _T.Any]) -> bool:
     return edge['Condition'] in (Condition.Success, Condition.AnyCase)
 
 def label_node(node: _T.Callable) -> str:
-    """Generates unique identifiers for Python callables in a DAG."""
-    return f"{node.__name__}__{next(_id_counter):08x}"
+    """Generates unique identifiers for Python callables in a DAG using UUIDs."""
+    return f"{node.__name__}__{_uuid.uuid4()}"
 
 def get_root(graph: _nx.DiGraph) -> _T.List[str]:
     """Given a network graph, return list of all nodes without incoming edges or dependencies.
