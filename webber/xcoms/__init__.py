@@ -12,14 +12,14 @@ import typing as _T
 
 class InvalidCallable(Exception):
     """Requested Webber Promise is invalid in DAG's given scope/context."""
-    def __init__(self, *args):
+    def __init__(self, *args: _T.Any) -> None:
         super().__init__()
         if args:
             self.message = args[0]
         else:
             self.message = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.message:
             return f"{self.message}"
         return "InvalidCallable"
@@ -30,7 +30,7 @@ class Promise:
     key: _T.Union[str, _T.Callable]
     def __init__(self, _key: _T.Union[str, _T.Callable]) -> None:
         """Initializing Promise using a function identifier (ID string or callable)."""
-        if not isinstance(_key, _T.Callable) and not isinstance(_key, str):
+        if not callable(_key) and not isinstance(_key, str):
             err_msg = "Keys must be string IDs or callables to be assigned to a Webber Promise"
             raise TypeError(err_msg)
         self.key = _key
