@@ -87,7 +87,7 @@ class DAG:
         node_name = _edges.label_node(node)
 
         args = tuple([
-            arg if not isinstance(args, _xcoms.Promise) else self.resolve_promise(arg)
+            arg if not isinstance(arg, _xcoms.Promise) else self.resolve_promise(arg)
             for arg in args
         ])
 
@@ -714,7 +714,7 @@ class DAG:
         
         if not force:
             if nodedict.get('callable'):
-                if _iscallable(nodedict['callable']):
+                if not _iscallable(nodedict['callable']):
                     err_msg = f"Requested node is not assigned a callable Python function."
                     raise TypeError(err_msg)
                 if not nodedict.get('name'):
