@@ -810,6 +810,7 @@ class DAG:
 
     @property
     def nodes(self) -> _T.Any:
+        """Returns the NodeView of the underlying NetworkX graph containing all DAG nodes."""
         return self.graph.nodes
 
     def node_id(self, identifier: _T.Union[str,_T.Callable]) -> str:
