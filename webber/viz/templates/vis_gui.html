@@ -1,21 +1,557 @@
 <!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Webber DAG Visualization</title>
     <script
-    type="text/javascript"
-    src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"
+        type="text/javascript"
+        src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"
     ></script>
     <style type="text/css">
-      #mynetwork {
-        border: 1px solid lightgray;
-        height: 500px;
-        margin-bottom: 5%;
-        background-color:  whitesmoke;
-      }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Dark theme (default) */
+        :root {
+            --bg-main: #1a1a2e;
+            --bg-card: #16213e;
+            --bg-network: #0f0f1a;
+            --bg-input: #0f0f1a;
+            --accent: #e94560;
+            --accent-secondary: #0f3460;
+            --text-primary: #eaeaea;
+            --text-muted: #a0a0a0;
+            --border: #2a2a4a;
+        }
+
+        /* Light theme */
+        html.light {
+            --bg-main: #f5f5f5;
+            --bg-card: #ffffff;
+            --bg-network: #fafafa;
+            --bg-input: #f0f0f0;
+            --accent: #e94560;
+            --accent-secondary: #e8e8e8;
+            --text-primary: #1a1a2e;
+            --text-muted: #666666;
+            --border: #e0e0e0;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-main);
+            color: var(--text-primary);
+            transition: background 0.3s, color 0.3s;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            grid-template-rows: 56px 1fr;
+            height: 100vh;
+            gap: 1px;
+            background: var(--border);
+        }
+
+        /* Header */
+        .header {
+            grid-column: 1 / -1;
+            background: var(--bg-card);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--accent) 0%, #ff6b6b 100%);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 16px;
+            color: white;
+        }
+
+        .logo-text {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+
+        .logo-text span {
+            color: var(--accent);
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn {
+            background: var(--accent-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 6px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        .btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        .btn-icon {
+            font-size: 14px;
+        }
+
+        /* Theme toggle */
+        .theme-toggle {
+            width: 32px;
+            height: 32px;
+            background: var(--accent-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.2s;
+        }
+
+        .theme-toggle:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: var(--bg-card);
+            padding: 16px;
+            overflow-y: auto;
+        }
+
+        .sidebar-section {
+            margin-bottom: 20px;
+        }
+
+        .sidebar-title {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 0;
+            font-size: 12px;
+        }
+
+        .legend-color {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            flex-shrink: 0;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .legend-line {
+            width: 20px;
+            height: 3px;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+
+        /* Node info panel */
+        .node-info {
+            background: var(--bg-input);
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 6px;
+        }
+
+        .node-info-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--accent);
+            word-break: break-all;
+        }
+
+        .node-info-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            padding: 4px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .node-info-row:last-child {
+            border-bottom: none;
+        }
+
+        .node-info-label {
+            color: var(--text-muted);
+        }
+
+        .node-info-value {
+            color: var(--text-primary);
+            font-family: 'Consolas', 'Monaco', monospace;
+            max-width: 140px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-align: right;
+        }
+
+        .node-info-empty {
+            color: var(--text-muted);
+            font-size: 11px;
+            font-style: italic;
+        }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .stat-card {
+            background: var(--bg-input);
+            border-radius: 6px;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .stat-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-top: 2px;
+        }
+
+        /* Network container */
+        .network-container {
+            background: var(--bg-network);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #mynetwork {
+            width: 100%;
+            height: 100%;
+            background: transparent;
+        }
+
+        /* Zoom controls */
+        .zoom-controls {
+            position: absolute;
+            bottom: 16px;
+            right: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .zoom-btn {
+            width: 32px;
+            height: 32px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .zoom-btn:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        /* Status bar */
+        .status-bar {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            display: flex;
+            gap: 12px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
+        .status-dot.off {
+            background: var(--text-muted);
+        }
     </style>
-  </head>
-  <body>
-    <div style="width:40vw; height:500px;">
-      <div id="mynetwork"><div class="vis-network" tabindex="0" style="position: relative; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-drag: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); width: 500px; height: 500px;"><canvas style="position: relative; touch-action: none; user-select: none; -webkit-user-drag: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); width: 500px; height: 500px;"></canvas></div></div>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">W</div>
+                <div class="logo-text">Webber<span>DAG</span></div>
+            </div>
+            <div class="header-controls">
+                <button class="btn" onclick="fitNetwork()">
+                    <span class="btn-icon">⊡</span> Fit
+                </button>
+                <button class="btn" id="physics-btn" onclick="togglePhysics()">
+                    <span class="btn-icon">⚡</span> Physics: On
+                </button>
+                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">
+                    <span id="theme-icon">☀</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-title">Statistics</div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="node-count">-</div>
+                        <div class="stat-label">Nodes</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="edge-count">-</div>
+                        <div class="stat-label">Edges</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">Edge Conditions</div>
+                <div class="legend-item">
+                    <div class="legend-line" style="background: grey;"></div>
+                    <span>Success</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-line" style="background: red;"></div>
+                    <span>Failure</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-line" style="background: blue;"></div>
+                    <span>Any Case</span>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">Node Types</div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #DCDCAF;"></div>
+                    <span>Function / Built-in</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #679AD1;"></div>
+                    <span>Lambda</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #71C6B1;"></div>
+                    <span>Class</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #AADAFB;"></div>
+                    <span>Other</span>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">Selected Node</div>
+                <div class="node-info" id="node-info">
+                    <div class="node-info-empty">Click a node to view details</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main network area -->
+        <main class="network-container">
+            <div id="mynetwork"></div>
+            <div class="zoom-controls">
+                <button class="zoom-btn" onclick="zoomIn()" title="Zoom in">+</button>
+                <button class="zoom-btn" onclick="zoomOut()" title="Zoom out">−</button>
+            </div>
+            <div class="status-bar">
+                <div class="status-item">
+                    <span class="status-dot" id="physics-dot"></span>
+                    <span id="physics-status">Physics active</span>
+                </div>
+            </div>
+        </main>
     </div>
+
     {{ network_script }}
 
-</body></html>
+    <script type="text/javascript">
+        var physicsEnabled = true;
+        var isDarkMode = true;
+
+        // Initialize after network is created
+        setTimeout(function() {
+            if (typeof nodes !== 'undefined' && typeof edges !== 'undefined') {
+                document.getElementById('node-count').textContent = nodes.length;
+                document.getElementById('edge-count').textContent = edges.length;
+            }
+
+            // Add click handler for node info
+            if (typeof network !== 'undefined') {
+                network.on('click', function(params) {
+                    if (params.nodes.length > 0) {
+                        var nodeId = params.nodes[0];
+                        var node = nodes.get(nodeId);
+                        var infoHtml = '<div class="node-info-title">' + escapeHtml(node.label) + '</div>';
+
+                        // Show truncated UUID
+                        var uuid = nodeId.split('__')[1] || nodeId;
+                        infoHtml += '<div class="node-info-row"><span class="node-info-label">UUID</span><span class="node-info-value" title="' + escapeHtml(uuid) + '">' + escapeHtml(uuid.substring(0, 8)) + '...</span></div>';
+
+                        if (node.title) {
+                            var lines = node.title.split('\n');
+                            lines.forEach(function(line) {
+                                if (line.includes(':')) {
+                                    var colonIdx = line.indexOf(':');
+                                    var label = line.substring(0, colonIdx).trim();
+                                    var value = line.substring(colonIdx + 1).trim();
+                                    if (value && value !== '{}' && label !== node.label) {
+                                        infoHtml += '<div class="node-info-row"><span class="node-info-label">' + escapeHtml(label) + '</span><span class="node-info-value" title="' + escapeHtml(value) + '">' + escapeHtml(value) + '</span></div>';
+                                    }
+                                }
+                            });
+                        }
+                        document.getElementById('node-info').innerHTML = infoHtml;
+                    } else {
+                        document.getElementById('node-info').innerHTML = '<div class="node-info-empty">Click a node to view details</div>';
+                    }
+                });
+
+                // Stabilization complete
+                network.on('stabilizationIterationsDone', function() {
+                    updatePhysicsUI();
+                });
+            }
+
+            updatePhysicsUI();
+        }, 100);
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function fitNetwork() {
+            if (typeof network !== 'undefined') {
+                network.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
+            }
+        }
+
+        function zoomIn() {
+            if (typeof network !== 'undefined') {
+                var scale = network.getScale() * 1.3;
+                network.moveTo({ scale: scale, animation: { duration: 200 } });
+            }
+        }
+
+        function zoomOut() {
+            if (typeof network !== 'undefined') {
+                var scale = network.getScale() / 1.3;
+                network.moveTo({ scale: scale, animation: { duration: 200 } });
+            }
+        }
+
+        function togglePhysics() {
+            if (typeof network !== 'undefined') {
+                physicsEnabled = !physicsEnabled;
+                network.setOptions({ physics: { enabled: physicsEnabled } });
+                updatePhysicsUI();
+            }
+        }
+
+        function updatePhysicsUI() {
+            var btn = document.getElementById('physics-btn');
+            var dot = document.getElementById('physics-dot');
+            var status = document.getElementById('physics-status');
+
+            if (physicsEnabled) {
+                btn.innerHTML = '<span class="btn-icon">⚡</span> Physics: On';
+                btn.classList.add('active');
+                dot.classList.remove('off');
+                status.textContent = 'Physics active';
+            } else {
+                btn.innerHTML = '<span class="btn-icon">⚡</span> Physics: Off';
+                btn.classList.remove('active');
+                dot.classList.add('off');
+                status.textContent = 'Physics disabled';
+            }
+        }
+
+        function toggleTheme() {
+            isDarkMode = !isDarkMode;
+            document.documentElement.classList.toggle('light', !isDarkMode);
+            document.getElementById('theme-icon').textContent = isDarkMode ? '☀' : '☾';
+        }
+    </script>
+</body>
+</html>
