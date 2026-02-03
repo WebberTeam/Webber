@@ -122,6 +122,7 @@ results = qdag.execute()  # Returns list of all outputs
 - **Comprehensive Test Suite**: 370 tests with 90% code coverage across all modules
 - **Performance Benchmarks**: Improvement from sub-second to millisecond-scale latency
 - **QueueDAG Overhaul:** Performance benchmarked and nesting supported.
+- **Browser Visualization Improvements**: Browser visualization now works completely offline with bundled Vis.js assets. Modern dark theme UI with statistics panel, node/edge legend, and keyboard shortcuts.
 - **New Code Examples + Documentation Overhaul**: Reorganized examples by feature, added performance tables, corrected QueueDAG latency claims
 - Promise support documentation for QueueDAG (LIFO queue resolution)
 
@@ -138,7 +139,6 @@ results = qdag.execute()  # Returns list of all outputs
 - Edge and Node filtering with Lambda Functions (e.g.: `lambda e: e.Condition == condition.OnSuccess`).
 
 #### *Future Roadmap*:
-- Visualization module improvements for browsers
-- Executor efficiency improvements (e.g.: covered node paths)
+You decide! We're taking recommendations for future work.
 - Successor and predecessor functions
 - Additional QueueDAG patterns and optimizations

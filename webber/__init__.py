@@ -5,7 +5,7 @@ import sys as _sys
 import logging as _logging
 import threading as _threading
 
-__version__ = '0.1.2'
+__version__ = '0.3.0'
 __supported__ = ("linux", "linux2", "win32")
 
 if _sys.platform not in __supported__:
@@ -14,21 +14,42 @@ if _sys.platform not in __supported__:
 from .core import DAG, Condition, QueueDAG
 from .xcoms import Promise
 
+# Event to signal when visualization libraries are ready (or failed gracefully)
+_viz_ready = _threading.Event()
+
 
 def _preload_viz() -> None:
-    """Background pre-import and initialization of visualization libraries to reduce first-call latency."""
+    """Background pre-import of visualization libraries to avoid circular imports."""
     try:
-        # Set non-interactive backend BEFORE importing pyplot to avoid GUI overhead
         import matplotlib
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
-        # Trigger font cache initialization (otherwise happens on first figure)
-        plt.figure()
-        plt.close()
-        # Import netgraph (slow due to numpy/scipy dependencies)
+        # Only set backend if pyplot hasn't been imported yet
+        if 'matplotlib.pyplot' not in _sys.modules:
+            matplotlib.use('Agg')
+        import matplotlib.pyplot
         import netgraph
-    except ImportError:
+    except (ImportError, AttributeError, Exception):
+        # Preload failed - visualization will import on demand instead
         pass
+    finally:
+        # Signal ready regardless of success
+        _viz_ready.set()
+
+
+def wait_for_viz_ready(timeout: float = 5.0) -> bool:
+    """
+    Wait for visualization libraries to finish loading.
+
+    Called internally by visualization functions to avoid race conditions.
+    Does not block DAG execution - only affects visualize() calls.
+
+    Args:
+        timeout: Maximum seconds to wait (default 5.0)
+
+    Returns:
+        True if ready, False if timeout occurred
+    """
+    return _viz_ready.wait(timeout=timeout)
+
 
 # Start background import on module load (daemon thread won't block exit)
-_threading.Thread(target=_preload_viz, daemon=True).start()
+_threading.Thread(target=_preload_viz, daemon=True, name='webber-viz-preload').start()

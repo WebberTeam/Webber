@@ -1148,8 +1148,6 @@ class DAG:
 
 class QueueDAG(DAG):
     """
-    #### Experimental, as of v0.2. ####
-
     Directed Acyclic Graph used to queue and execute Pythonic callables in parallel,
     while stringing the outputs of those callables in linear sequences.
 
@@ -1162,11 +1160,10 @@ class QueueDAG(DAG):
 
     Both conditions can be set at run-time.
 
-    Nesting Performance (v0.2):
-        QueueDAG can be nested inside a standard webber.DAG by passing qdag.execute as a callable.
-        Benchmarks show moderate overhead of 1.3-2.5x (~1-2ms fixed cost) when nested, due to the
-        outer DAG's ThreadPoolExecutor setup and task wrapper infrastructure. This is well within
-        acceptable millisecond-scale latency for most real-time applications.
+    QueueDAG can be nested inside a standard webber.DAG by passing qdag.execute as a callable.
+    Benchmarks show moderate overhead of 1.3-2.5x (~1-2ms fixed cost) when nested, due to the
+    outer DAG's ThreadPoolExecutor setup and task wrapper infrastructure. This is well within
+    acceptable millisecond-scale latency for most real-time applications.
     """
 
     conditions: _T.Dict[str, _T.Dict[str, _T.Any]] = {}
