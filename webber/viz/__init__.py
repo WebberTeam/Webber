@@ -23,7 +23,7 @@ from jinja2 import Environment as _Environment, FileSystemLoader as _FileSystemL
 
 __all__ = ["generate_pyvis_network", "visualize_plt", "visualize_browser"]
 
-edge_colors: dict[Condition, str] = {
+edge_colors: _typing.Dict[Condition, str] = {
     Condition.Success: 'grey',
     Condition.AnyCase: 'blue',
     Condition.Failure: 'red'
@@ -50,7 +50,7 @@ def node_color(c: _typing.Callable):
             return '#DCDCAF'
     return '#AADAFB'
 
-def get_layers(graph: _nx.DiGraph) -> list[list[str]]:
+def get_layers(graph: _nx.DiGraph) -> _typing.List[_typing.List[str]]:
     """
     Generates ordered list of node identifiers given a directed network graph.
     """

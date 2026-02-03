@@ -22,7 +22,7 @@ import itertools as _it
 
 __all__ = ["DAG", "Condition", "QueueDAG"]
 
-def _iscallable(function: any):
+def _iscallable(function: _T.Any):
     return callable(function)
 
 class _OutputLogger:
@@ -66,7 +66,7 @@ class _OutputLogger:
         """Allows Python built-ins to exit scope on error. (?)"""
         self._redirector.__exit__(exc_type, exc_value, traceback)
 
-def _event_wrapper(_callable: callable, _name: str, _args, _kwargs):
+def _event_wrapper(_callable: _T.Callable, _name: str, _args: tuple, _kwargs: dict):
     """Wrapper used by Webber DAGs to log and execute a Python callables as a unit of work."""
     with _OutputLogger(str(_uuid.uuid4()), "INFO", _name) as _:
         return _callable(*_args, **_kwargs)
@@ -320,7 +320,7 @@ class DAG:
                 ids = E
             edge_ids = [self.get_edge(i[0], i[1], data=False) for i in ids]
 
-        std_update = (continue_on == None)
+        std_update = (continue_on is None)
 
         if std_update:
             for edge_id, e in zip(edge_ids, E):
@@ -337,7 +337,7 @@ class DAG:
                 for e in edge_ids:
                     self.graph.edges[e]['Condition'] = continue_on
 
-    def _update_edge(self, edgedict: dict, id: tuple[str, str] = None, force: bool = False):
+    def _update_edge(self, edgedict: dict, id: _T.Tuple[str, str] = None, force: bool = False):
         """
         Internal only. Update properties of an individual edge within a DAG's scope, 
         given a well-structured dictionary and the tuple identifier of the network edge. 
@@ -495,13 +495,13 @@ class DAG:
                 for node_id in node_ids:
                     self.graph.nodes[node_id]['kwargs'] = kwargs
 
-    def get_edges(self, *N, data: bool = True) -> _T.Union[list[edgedict], list[tuple]]:
+    def get_edges(self, *N, data: bool = True) -> _T.Union[_T.List[edgedict], _T.List[_T.Tuple[str, str]]]:
         """
         Retrieval function for DAG edge data, based on tuple identifiers.
         Use filter_edges for more flexible controls (e.g.: filter_edges(in=['node_1', 'node_2']))
         """
         if len(N) == 0:
-            if data == True:
+            if data:
                 return list(map(edgedict, self.graph.edges.data()))
             return list(self.graph.edges.data(data=False))
             
@@ -516,7 +516,7 @@ class DAG:
         edge_data = [self.get_edge(o, i, data=data) for (o, i) in N]
         return edge_data
     
-    def get_edge(self, outgoing_node: _T.Union[str, callable], incoming_node: _T.Union[str, callable], data: bool = True) -> _T.Union[edgedict, tuple]:
+    def get_edge(self, outgoing_node: _T.Union[str, _T.Callable], incoming_node: _T.Union[str, _T.Callable], data: bool = True) -> _T.Union[edgedict, _T.Tuple[str, str]]:
         """
         Retrieval function for a single directed edge between nodes in a DAG's scope. 
         """
@@ -529,7 +529,7 @@ class DAG:
             raise ValueError(err_msg)
         return edgedict(*id, **edge_data)
 
-    def get_node(self, n: _T.Union[str, callable]) -> dotdict:
+    def get_node(self, n: _T.Union[str, _T.Callable]) -> dotdict:
         """
         Given a unique identifier, returns a dictionary of node metadata
         for a single node in the DAG's scope.
@@ -537,7 +537,7 @@ class DAG:
         node_id = self.node_id(n)
         return dotdict(self.graph.nodes[node_id])
 
-    def get_nodes(self, *N) -> list[dotdict]:
+    def get_nodes(self, *N) -> _T.List[dotdict]:
         """
         Flexible function to retrieve DAG node data, based on node identifiers 
         (e.g.: string IDs or unique callables).
@@ -572,7 +572,7 @@ class DAG:
             return [node['id'] for node in self.graph.nodes.values() if filter(dotdict(node))]
         return [dotdict(node) for node in self.graph.nodes.values() if filter(dotdict(node))]
     
-    def filter_edges(self, filter = _types.LambdaType, data: bool = False) -> list[edgedict]:
+    def filter_edges(self, filter: _types.LambdaType, data: bool = False) -> _T.List[edgedict]:
         """
         Given a lambda function, filter edges in a DAG's scope based on its attributes.
         Current limitation: Filters must use node identifier strings when referencing nodes.
@@ -649,7 +649,7 @@ class DAG:
                 raise NotImplementedError(err_msg)
 
     @property
-    def root(self) -> list[str]:
+    def root(self) -> _T.List[str]:
         """
         Return list of nodes with no dependencies.
         Root nodes will occur first in DAG's order of operations.
@@ -817,7 +817,7 @@ class DAG:
                 # Initialize local variables for execution.
                 complete, started, failed, skipped = set(), set(), set(), set()
                 events = set(roots)
-                refs: dict[str, _futures.Future] = {}
+                refs: _T.Dict[str, _futures.Future] = {}
 
                 def raise_exc(message):
                     raise ValueError(message)

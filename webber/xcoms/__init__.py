@@ -30,7 +30,7 @@ class Promise:
     key: _T.Union[str, _T.Callable]
     def __init__(self, _key: _T.Union[str, _T.Callable]) -> None:
         """Initializing Promise using a function identifier (ID string or callable)."""
-        if not isinstance(_key, _T.Callable) and not isinstance(_key, str):
+        if not callable(_key) and not isinstance(_key, str):
             err_msg = "Keys must be string IDs or callables to be assigned to a Webber Promise"
             raise TypeError(err_msg)
         self.key = _key
