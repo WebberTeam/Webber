@@ -151,12 +151,12 @@ class DAG:
 
             # Error Cases 0, 1: Either of the callables appear more than once in the DAG.
             if node_callables.count(u_of_edge) > 1:
-                err_msg = f"Outgoing callable {u_of_edge.__name__} " \
+                err_msg = f"Callable {u_of_edge.__name__} " \
                         + "exists more than once in this DAG. " \
-                        + "Use the unique identifier of the required node or add a new node."
+                        + "Use the unique string identifier of the required node."
                 raise ValueError(err_msg)
             if node_callables.count(v_of_edge) > 1:
-                err_msg = f"Incoming callable {v_of_edge.__name__} " \
+                err_msg = f"Callable {v_of_edge.__name__} " \
                         + "exists more than once in this DAG. " \
                         + "Use the unique string identifier of the required node."
                 raise ValueError(err_msg)
@@ -199,9 +199,9 @@ class DAG:
                             return n
                         # Error Case 4: The requested callable exists more than once in the DAG.
                         if node_callables.count(n) > 1:
-                            err_msg = f"Outgoing callable {n.__name__} " \
+                            err_msg = f"Callable {n.__name__} " \
                                 + "exists more than once in this DAG. " \
-                                + "Use the unique ID of the required node or add a new node."
+                                + "Use the unique string identifier of the required node."
                             raise ValueError(err_msg)
                         # If the callable exists only once in the DAG, use its unique identifier to
                         # evaluate the requested edge.
@@ -237,9 +237,9 @@ class DAG:
         # illegal dependencies/behavior.
         # First, we should account for potential new nodes. This also handles
         # duplicates on first entry to the DAG (e.g.: edge == (print, print))
-        if new_callables.get(u_of_edge) != None:
+        if new_callables.get(u_of_edge) is not None:
             outgoing_node = self.add_node(new_callables[u_of_edge])
-        if new_callables.get(v_of_edge) != None:
+        if new_callables.get(v_of_edge) is not None:
             incoming_node = self.add_node(new_callables[v_of_edge])
 
         # Then we can add the new edge.
@@ -307,7 +307,7 @@ class DAG:
             except:
                 E = E[0]
 
-        if filter != None:
+        if filter is not None:
             edge_ids = self.filter_edges(filter, data = False)
         else:
             if isinstance(E[0], dict) or isinstance(E[0], edgedict):
@@ -324,13 +324,13 @@ class DAG:
 
         if std_update:
             for edge_id, e in zip(edge_ids, E):
-                if data != None:
+                if data is not None:
                     self._update_edge(data, id = edge_id)
                 else:
                     self._update_edge(e, id = edge_id)
         
         else:
-            if continue_on != None:
+            if continue_on is not None:
                 if not isinstance(continue_on, Condition):
                     err_msg = f"Condition assignment must use webber.edges.Condition"
                     raise TypeError(err_msg)
@@ -343,7 +343,7 @@ class DAG:
         given a well-structured dictionary and the tuple identifier of the network edge. 
         Force argument bypasses validation, and should only be used internally.
         """
-        if id != None:
+        if id is not None:
             try:
                 if edgedict.get('id') and id != edgedict['id']:
                     raise ValueError(f"Given ID {id} inconsistent with dictionary identifier: {edgedict['id']}")
@@ -438,7 +438,7 @@ class DAG:
         if len(N) == 0 and filter == None:
             raise ValueError("Either an array of node IDs or node data (N) or a filter must be passed to this function.")
 
-        elif len(N) > 0 and filter != None:
+        elif len(N) > 0 and filter is not None:
             raise ValueError("Node data array (N) and filter argument are mutually exclusive, and cannot both be defined to identify nodes to update DAG's scope.")
 
         elif isinstance(N, dict) or isinstance(N, str):
@@ -453,7 +453,7 @@ class DAG:
                     N = N[0]
 
 
-        if filter != None:
+        if filter is not None:
             node_ids = self.filter_nodes(filter, data = False)
         else:
             if isinstance(N[0], dict):
@@ -466,13 +466,13 @@ class DAG:
 
         if std_update:
             for node_id, n in zip(node_ids, N):
-                if data != None:
+                if data is not None:
                     self._update_node(data, id = node_id)
                 else:
                     self._update_node(n, id = node_id)
         
         else:
-            if callable != None:
+            if callable is not None:
                 if not _iscallable(callable):
                     err_msg = f"Requested node is not assigned a callable Python function."
                     raise TypeError(err_msg)
@@ -480,7 +480,7 @@ class DAG:
                     self.graph.nodes[node_id]['callable'] = callable
                     self.graph.nodes[node_id]['name'] = callable.__name__
             
-            if args != None:
+            if args is not None:
                 if not (isinstance(args, _abc.Iterable) and not isinstance(args, str)):
                     err_msg = f"Requested node is not assigned a tuple of pos args."
                     raise TypeError(err_msg)
@@ -488,7 +488,7 @@ class DAG:
                 for node_id in node_ids:
                     self.graph.nodes[node_id]['args'] = args
             
-            if kwargs != None:
+            if kwargs is not None:
                 if not isinstance(kwargs, dict):
                     err_msg = f"Requested node is not assigned a dictionary of kw args."
                     raise TypeError(err_msg)
@@ -509,7 +509,7 @@ class DAG:
         #     if isinstance(N[0], _abc.Iterable) and not isinstance(N[0], tuple):
         #         N = N[0]
 
-        if len(N) != len(set(N)) or False in map(lambda n: isinstance(n, _abc.Iterable) and len(n) == 2, N):
+        if len(N) != len(set(N)) or not all(isinstance(n, _abc.Iterable) and len(n) == 2 for n in N):
             err_msg = 'All requested edges must be unique tuples of size 2.'
             raise ValueError(err_msg)
     
@@ -686,7 +686,7 @@ class DAG:
                 case _:
                     err_msg = f"Callable {identifier.__name__} " \
                             + "exists more than once in this DAG. " \
-                            + "Use the unique identifier of the required node."
+                            + "Use the unique string identifier of the required node."
                     raise ValueError(err_msg)
         else:            
             err_msg = f"Node {identifier} must be a string or a Python callable"
@@ -699,9 +699,9 @@ class DAG:
         given a well-structured dictionary and the tuple identifier of the network edge. 
         Force argument bypasses dictionary validation, and should only be used internally.
         """
-        if id != None:
+        if id is not None:
             try:
-                if nodedict.get('id') != None and id != nodedict['id']:
+                if nodedict.get('id') is not None and id != nodedict['id']:
                     raise ValueError(f"Given ID {id} inconsistent with dictionary identifier: {nodedict['id']}")
             except ValueError as e:
                 if not force:
@@ -725,7 +725,7 @@ class DAG:
                 raise TypeError(err_msg)
 
             if nodedict.get('args'):
-                if not (isinstance(nodedict['args'], _abc.Iterable) or isinstance(nodedict['args'], str)):
+                if not (isinstance(nodedict['args'], _abc.Iterable) and not isinstance(nodedict['args'], str)):
                     err_msg = f"Requested node is not assigned a tuple of pos args."
                     raise TypeError(err_msg)
                 nodedict['args'] = tuple(nodedict['args'])
@@ -837,6 +837,7 @@ class DAG:
                     return True
 
                 skip  = graph.nodes.data("skip", default=(False, False))
+                # Retry count starts at c+1 because it's decremented before checking (see line 857)
                 retry = {n: [c+1, {}] for n,c in graph.nodes.data("retry", default=0)}
 
                 # Start execution of root node functions.
@@ -882,7 +883,7 @@ class DAG:
                     # Loop until all nodes in the network are executed.
                     while (len(complete) + len(failed) + len(skipped)) != len(graph):
                         for event in events:
-                            if refs[event].done() is True:
+                            if refs[event].done():
                                 if refs[event].exception(timeout=0) is not None:
                                     try:
                                         raise refs[event].exception(timeout=0)
@@ -986,9 +987,9 @@ class QueueDAG(DAG):
 
         return_val = super().add_node(node, *args, **kwargs)
         
-        if max_iter != None:
+        if max_iter is not None:
             iter_limit = int(max_iter)
-        elif iterator != None:
+        elif iterator is not None:
             iter_limit = int(iterator)
         else:
             iter_limit = None

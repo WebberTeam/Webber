@@ -78,7 +78,7 @@ def valid_dag(graph: _nx.Graph) -> bool:
     return (
         isinstance(graph, _nx.Graph) and
         _nx.is_directed_acyclic_graph(graph) and
-        not set(map(callable, list(graph.nodes.keys()))).issuperset({False})
+        all(callable(node) for node in graph.nodes.keys())
     )
 
 
