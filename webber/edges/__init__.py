@@ -25,7 +25,6 @@ class edgedict(dotdict):
 
     Provides convenient access to edge properties: parent, child, id, and Condition.
     """
-    super(dotdict)
     def __init__(self, *E: _T.Any, **kwargs: _T.Any) -> None:
         """Initialize edge dictionary with parent/child nodes and optional attributes."""
         super().__init__({'parent': E[0], 'child': E[1], 'id': E[:2]})

@@ -2,6 +2,7 @@
 Base module for abstract multiprocessing system - a directed acyclic graph.
 """
 import sys as _sys
+import time as _time
 import typing as _T
 import types as _types
 import traceback as _traceback
@@ -10,6 +11,7 @@ import concurrent.futures as _futures
 import queue as _q
 import itertools as _it
 import threading as _threading
+import dataclasses as _dc
 from datetime import datetime as _datetime
 
 import networkx as _nx
@@ -19,7 +21,70 @@ import webber.queue as _queue
 
 from webber.edges import Condition, dotdict, edgedict
 
-__all__ = ["DAG", "Condition", "QueueDAG"]
+__all__ = ["DAG", "Condition", "QueueDAG", "DAGCallbacks", "DAGMetrics"]
+
+
+@_dc.dataclass
+class DAGCallbacks:
+    """
+    Optional callbacks for observing DAG execution progress.
+    All fields default to None (zero overhead when not set).
+    Callbacks execute synchronously in the scheduling thread — keep them fast.
+    """
+    on_dag_start: _T.Callable[[int], None] | None = None
+    """Called before execution begins. Args: total_nodes."""
+
+    on_task_start: _T.Callable[[str, str], None] | None = None
+    """Called before a task is submitted. Args: node_id, name."""
+
+    on_task_complete: _T.Callable[[str, str, _T.Any], None] | None = None
+    """Called when a task succeeds. Args: node_id, name, result."""
+
+    on_task_error: _T.Callable[[str, str, Exception], None] | None = None
+    """Called when a task fails. Args: node_id, name, exception."""
+
+    on_progress: _T.Callable[[int, int, int, int], None] | None = None
+    """Called after each state change. Args: completed, failed, skipped, total."""
+
+    on_dag_complete: _T.Callable[[int, int, int, float], None] | None = None
+    """Called when execution finishes. Args: completed, failed, skipped, duration."""
+
+
+@_dc.dataclass
+class DAGMetrics:
+    """Structured telemetry from a completed DAG execution."""
+    total_duration: float
+    """Total wall-clock duration in seconds."""
+
+    task_durations: _T.Dict[str, float] = _dc.field(default_factory=dict)
+    """Per-node execution duration in seconds, keyed by node_id."""
+
+    task_start_times: _T.Dict[str, float] = _dc.field(default_factory=dict)
+    """Per-node start time (perf_counter value), keyed by node_id."""
+
+    completed: set = _dc.field(default_factory=set)
+    """Set of node_ids that completed successfully."""
+
+    failed: set = _dc.field(default_factory=set)
+    """Set of node_ids that failed."""
+
+    skipped: set = _dc.field(default_factory=set)
+    """Set of node_ids that were skipped."""
+
+    total_nodes: int = 0
+    """Total number of nodes in the DAG."""
+
+    @property
+    def completed_count(self) -> int:
+        return len(self.completed)
+
+    @property
+    def failed_count(self) -> int:
+        return len(self.failed)
+
+    @property
+    def skipped_count(self) -> int:
+        return len(self.skipped)
 
 def _iscallable(function: _T.Any) -> bool:
     return callable(function)
@@ -430,7 +495,7 @@ class DAG:
         \t data = { 'continue_on': webber.edges.Condition }
 
         """
-        if len(E) == 0 and filter == None:
+        if len(E) == 0 and filter is None:
             raise ValueError("Either an array of edge IDs / edgedicts (E) or a filter must be passed to this function.")
 
         elif isinstance(E, dict) or isinstance(E, edgedict):
@@ -439,7 +504,7 @@ class DAG:
         elif len(E) == 1 and isinstance(E[0], _abc.Iterable):
             try:
                 _ = self.get_edges(E[0])
-            except:
+            except (ValueError, TypeError, KeyError):
                 E = E[0]
 
         if filter is not None:
@@ -506,7 +571,7 @@ class DAG:
             if e1 != e2:
                 raise ValueError('Edge vertices should not be changed using update functions.')
             
-            elif e1 == None:
+            elif e1 is None:
                 raise ValueError('Requested edge was not given an identifier.')
 
             if edgedict.get('continue_on') and not isinstance(edgedict['continue_on'], Condition):
@@ -570,7 +635,7 @@ class DAG:
         > kwargs: Keyword arguments to be passed to matching callables in the DAG's scope, using a Python dictionary.
 
         """
-        if len(N) == 0 and filter == None:
+        if len(N) == 0 and filter is None:
             raise ValueError("Either an array of node IDs or node data (N) or a filter must be passed to this function.")
 
         elif len(N) > 0 and filter is not None:
@@ -597,7 +662,7 @@ class DAG:
                 ids = N
             node_ids = [self.node_id(i) for i in ids]
         
-        std_update = (callable == None) and (args == None) and (kwargs == None)
+        std_update = (callable is None) and (args is None) and (kwargs is None)
 
         if std_update:
             for node_id, n in zip(node_ids, N):
@@ -639,10 +704,6 @@ class DAG:
             if data:
                 return [edgedict(u, v, **d) for u, v, d in self.graph.edges.data()]
             return list(self.graph.edges.data(data=False))
-            
-        # elif len(N) == 1:
-        #     if isinstance(N[0], _abc.Iterable) and not isinstance(N[0], tuple):
-        #         N = N[0]
 
         if len(N) != len(set(N)) or not all(isinstance(n, _abc.Iterable) and len(n) == 2 for n in N):
             err_msg = 'All requested edges must be unique tuples of size 2.'
@@ -754,7 +815,8 @@ class DAG:
         return_ref: bool = False,
         print_exc: bool = False,
         max_workers: _T.Optional[int] = None,
-        verbose: bool = True
+        verbose: bool = True,
+        callbacks: DAGCallbacks | None = None
     ) -> _T.Optional['DAG.DAGExecutor']:
         """
         Basic wrapper for execution of the DAG's underlying callables.
@@ -764,10 +826,12 @@ class DAG:
             print_exc: If True, print full exception tracebacks.
             max_workers: Maximum number of worker threads. Defaults to None (auto).
             verbose: If True, log task start/completion messages. Defaults to True.
+            callbacks: Optional DAGCallbacks instance for observing execution progress.
         """
         executor = self.DAGExecutor(
             self.graph, self.root, print_exc,
-            max_workers=max_workers, verbose=verbose
+            max_workers=max_workers, verbose=verbose,
+            callbacks=callbacks
         )
         return executor if return_ref else None
 
@@ -902,11 +966,96 @@ class DAG:
         subgraph = self.graph.subgraph(all_nodes)
         return DAG(subgraph, __force=True)
 
+    def to_dict(self) -> dict:
+        """
+        Export DAG topology as a JSON-serializable dictionary.
+        Preserves graph structure, edge conditions, and JSON-safe args/kwargs.
+        Does NOT preserve callable objects — use from_dict() with a registry to reconstruct.
+        """
+        import webber.schema as _schema
+        return _schema.export_topology(self)
+
+    def to_json(self, file: str | None = None) -> str:
+        """
+        Export DAG topology as a JSON string, optionally writing to a file.
+
+        Args:
+            file: Optional file path to write JSON to.
+
+        Returns:
+            JSON string of the topology.
+        """
+        import json
+        data = self.to_dict()
+        json_str = json.dumps(data, indent=2)
+        if file:
+            with open(file, 'w', encoding='utf-8') as f:
+                f.write(json_str)
+        return json_str
+
+    @classmethod
+    def from_dict(
+        cls,
+        data: dict,
+        registry: _T.Dict[str, _T.Callable] | None = None,
+        module: _T.Any = None,
+    ) -> 'DAG':
+        """
+        Reconstruct a DAG from an exported topology dictionary.
+
+        Args:
+            data: Topology dict (from to_dict() or parsed JSON).
+            registry: Dict mapping node names to callables (primary).
+            module: Python module for name-based auto-resolution (fallback).
+
+        Returns:
+            A new DAG instance with restored structure.
+        """
+        import webber.schema as _schema
+        return _schema.import_topology(data, registry=registry, module=module)
+
+    @classmethod
+    def from_json(
+        cls,
+        source: str,
+        registry: _T.Dict[str, _T.Callable] | None = None,
+        module: _T.Any = None,
+    ) -> 'DAG':
+        """
+        Reconstruct a DAG from a JSON string or file path.
+
+        Args:
+            source: JSON string or path to a .json file.
+            registry: Dict mapping node names to callables (primary).
+            module: Python module for name-based auto-resolution (fallback).
+
+        Returns:
+            A new DAG instance with restored structure.
+        """
+        import json
+        import os
+        if os.path.isfile(source):
+            with open(source, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        else:
+            data = json.loads(source)
+        return cls.from_dict(data, registry=registry, module=module)
+
     def resolve_promise(self, promise: _xcoms.Promise) -> _xcoms.Promise:
         """
         Returns a Promise with a unique string identifier, if a given Promise is valid, based on the DAG's current scope.
         Raises `webber.xcoms.InvalidCallable` if Promise requests a callable that is out of scope.
+        Preserves IterPromise subclass type and its partial/zip flags.
         """
+        if isinstance(promise, _xcoms.IterPromise):
+            resolved_keys = []
+            for k in promise.keys:
+                try:
+                    resolved_keys.append(self.node_id(k))
+                except Exception as e:
+                    raise _xcoms.InvalidCallable(e)
+            return _xcoms.IterPromise(*resolved_keys, partial=promise.partial, zip=promise.zip)
+
         try:
             key = self.node_id(promise.key)
         except Exception as e:
@@ -921,7 +1070,7 @@ class DAG:
             return
 
         # Meant for internal use only, creating DAGs from subgraphs.
-        if kwargs.get('__force') == True:
+        if kwargs.get('__force'):
             self.graph = _T.cast(_nx.DiGraph, graph)
             # Build cache from existing subgraph
             self._callable_to_id = {}
@@ -971,6 +1120,7 @@ class DAG:
     class DAGExecutor:
         """
         Base class used to execute DAG in embarrassingly parallel.
+        Persists execution state for metrics and post-execution inspection.
         """
         def __init__(
             self,
@@ -978,8 +1128,19 @@ class DAG:
             roots: _T.List[str],
             print_exc: bool = False,
             max_workers: _T.Optional[int] = None,
-            verbose: bool = True
+            verbose: bool = True,
+            callbacks: DAGCallbacks | None = None
         ) -> None:
+
+            self.graph = graph
+            self.completed: set[str] = set()
+            self.failed: set[str] = set()
+            self.skipped: set[str] = set()
+            self.task_durations: _T.Dict[str, float] = {}
+            self.task_start_times: _T.Dict[str, float] = {}
+            self.dag_start_time: float = 0.0
+            self.dag_end_time: float = 0.0
+            self._callbacks = callbacks
 
             # Skip execution if there are no callables in scope.
             if len(graph.nodes) == 0:
@@ -987,11 +1148,15 @@ class DAG:
                     print('Given DAG has no callables in scope. Skipping execution...')
                 return
 
-            # Initialize local variables for execution.
-            complete: set[str] = set()
+            total_nodes = len(graph.nodes)
+
+            if self._callbacks and self._callbacks.on_dag_start:
+                self._callbacks.on_dag_start(total_nodes)
+
+            self.dag_start_time = _time.perf_counter()
+
+            # Local execution state
             started: set[str] = set()
-            failed: set[str] = set()
-            skipped: set[str] = set()
             refs: _T.Dict[str, _futures.Future[_T.Any]] = {}
 
             def raise_exc(message: str) -> None:
@@ -1001,17 +1166,18 @@ class DAG:
                 for p in graph.predecessors(n):
                     match graph.edges[(p, n)]['Condition']:
                         case Condition.Success:
-                            if p not in complete:
+                            if p not in self.completed:
                                 return False
                         case Condition.Failure:
-                            if p not in failed:
+                            if p not in self.failed:
                                 return False
                         case Condition.AnyCase:
-                            if p not in failed and p not in complete:
+                            if p not in self.failed and p not in self.completed:
                                 return False
                 return True
 
             skip = graph.nodes.data("skip", default=(False, False))
+            # c+1 because count is decremented before checking if retries remain
             retry: _T.Dict[str, _T.List[_T.Any]] = {
                 n: [c + 1, {}] for n, c in graph.nodes.data("retry", default=0)
             }
@@ -1026,6 +1192,11 @@ class DAG:
                     args: _T.Union[tuple[_T.Any, ...], list[_T.Any]],
                     kwargs: _T.Dict[str, _T.Any]
                 ) -> _futures.Future[_T.Any]:
+                    if self._callbacks and self._callbacks.on_task_start:
+                        self._callbacks.on_task_start(event, name)
+
+                    self.task_start_times[event] = _time.perf_counter()
+
                     if skip[event][0]:
                         retry[event][0] = 0
                         skip_callable = raise_exc if skip[event][1] else print
@@ -1066,11 +1237,221 @@ class DAG:
                     )
                     started.add(event)
 
-                # Process futures as they complete (no busy-wait)
-                pending = set(refs.values())
-                future_to_event = {v: k for k, v in refs.items()}
+                # Iter-node fan-out tracking
+                _iter_state: _T.Dict[str, _T.Dict[str, _T.Any]] = {}
+                _sub_future_to_iter: _T.Dict[_futures.Future[_T.Any], _T.Tuple[str, int]] = {}
 
-                while (len(complete) + len(failed) + len(skipped)) != len(graph):
+                def _process_successors(completed_event: str) -> None:
+                    """Identify ready successors and submit them (normal or fan-out)."""
+                    carryon = set(graph.successors(completed_event)).difference(self.skipped)
+                    ready = [s for s in carryon if run_conditions_met(s)]
+
+                    for successor in ready:
+                        node_args = graph.nodes[successor]['args']
+                        node_kwargs = graph.nodes[successor]['kwargs']
+
+                        # Detect IterPromise in args/kwargs
+                        iter_in_args = [(i, a) for i, a in enumerate(node_args) if isinstance(a, _xcoms.IterPromise)]
+                        iter_in_kwargs = [(k, v) for k, v in node_kwargs.items() if isinstance(v, _xcoms.IterPromise)]
+
+                        total_iter = len(iter_in_args) + len(iter_in_kwargs)
+
+                        if total_iter > 1:
+                            raise ValueError(
+                                f"Node {successor} has {total_iter} IterPromise args. "
+                                "Use a single IterPromise with zip=True for multi-source fan-out."
+                            )
+
+                        if total_iter == 1:
+                            # --- FAN-OUT PATH ---
+                            _submit_iter_node(successor, iter_in_args, iter_in_kwargs, node_args, node_kwargs)
+                        else:
+                            # --- NORMAL PATH ---
+                            _args = [
+                                a if not isinstance(a, _xcoms.Promise) else refs[_T.cast(str, a.key)].result()
+                                for a in node_args
+                            ]
+                            _kwargs = {
+                                k: v if not isinstance(v, _xcoms.Promise) else refs[_T.cast(str, v.key)].result()
+                                for k, v in node_kwargs.items()
+                            }
+                            new_future = Submit(
+                                successor,
+                                graph.nodes[successor]['callable'],
+                                graph.nodes[successor]['name'],
+                                _args, _kwargs
+                            )
+                            refs[successor] = new_future
+                            pending.add(new_future)
+                            future_to_event[new_future] = successor
+                            started.add(successor)
+
+                def _submit_iter_node(
+                    successor: str,
+                    iter_in_args: list, iter_in_kwargs: list,
+                    node_args: tuple, node_kwargs: dict,
+                ) -> None:
+                    """Handle fan-out submission for iter-nodes."""
+                    # Skip check — delegate to normal Submit if skipped
+                    if skip[successor][0]:
+                        new_future = Submit(
+                            successor,
+                            graph.nodes[successor]['callable'],
+                            graph.nodes[successor]['name'],
+                            [], {}
+                        )
+                        refs[successor] = new_future
+                        pending.add(new_future)
+                        future_to_event[new_future] = successor
+                        started.add(successor)
+                        return
+
+                    # Identify the IterPromise and resolve parent results
+                    if iter_in_args:
+                        iter_idx, iter_promise = iter_in_args[0]
+                        is_positional = True
+                    else:
+                        iter_key, iter_promise = iter_in_kwargs[0]
+                        is_positional = False
+
+                    if iter_promise.zip and len(iter_promise.keys) > 1:
+                        # Zip mode: resolve all parent lists and zip them
+                        parent_lists = []
+                        for k in iter_promise.keys:
+                            result = refs[_T.cast(str, k)].result()
+                            if not isinstance(result, (list, tuple)):
+                                raise TypeError(
+                                    f"IterPromise zip source for node {successor} returned "
+                                    f"{type(result).__name__}, expected list or tuple."
+                                )
+                            parent_lists.append(result)
+                        items = list(builtins_zip(*parent_lists))  # shortest-truncation
+                    else:
+                        # Single source
+                        parent_result = refs[_T.cast(str, iter_promise.keys[0])].result()
+                        if not isinstance(parent_result, (list, tuple)):
+                            raise TypeError(
+                                f"IterPromise source for node {successor} returned "
+                                f"{type(parent_result).__name__}, expected list or tuple."
+                            )
+                        items = list(parent_result)
+
+                    # Resolve non-iter args (regular Promises and literals)
+                    base_args = [
+                        a if not isinstance(a, _xcoms.Promise) else refs[_T.cast(str, a.key)].result()
+                        for a in node_args
+                    ]
+                    base_kwargs = {
+                        k: v if not isinstance(v, _xcoms.Promise) else refs[_T.cast(str, v.key)].result()
+                        for k, v in node_kwargs.items()
+                    }
+
+                    # Create aggregation future
+                    agg_future: _futures.Future[_T.Any] = _futures.Future()
+                    refs[successor] = agg_future
+
+                    if self._callbacks and self._callbacks.on_task_start:
+                        self._callbacks.on_task_start(successor, graph.nodes[successor]['name'])
+                    self.task_start_times[successor] = _time.perf_counter()
+
+                    # Empty list → complete immediately with []
+                    if len(items) == 0:
+                        agg_future.set_result([])
+                        self.task_durations[successor] = _time.perf_counter() - self.task_start_times[successor]
+                        self.completed.add(successor)
+                        if self._callbacks and self._callbacks.on_task_complete:
+                            self._callbacks.on_task_complete(successor, graph.nodes[successor]['name'], [])
+                        if self._callbacks and self._callbacks.on_progress:
+                            self._callbacks.on_progress(len(self.completed), len(self.failed), len(self.skipped), total_nodes)
+                        started.add(successor)
+                        _process_successors(successor)
+                        return
+
+                    # Submit N sub-tasks
+                    sub_futures: _T.List[_futures.Future[_T.Any]] = []
+                    for idx, item in enumerate(items):
+                        if is_positional:
+                            _args = list(base_args)
+                            _args[iter_idx] = item
+                        else:
+                            _args = list(base_args)
+
+                        _kwargs = dict(base_kwargs)
+                        if not is_positional:
+                            _kwargs[iter_key] = item
+
+                        sub_future = executor.submit(
+                            _event_wrapper,
+                            _callable=graph.nodes[successor]['callable'],
+                            _name=f"{graph.nodes[successor]['name']}[{idx}]",
+                            _args=_args,
+                            _kwargs=_kwargs,
+                            _verbose=verbose
+                        )
+                        sub_futures.append(sub_future)
+                        _sub_future_to_iter[sub_future] = (successor, idx)
+                        pending.add(sub_future)
+                        future_to_event[sub_future] = f"__iter__{successor}__{idx}"
+
+                    _iter_state[successor] = {
+                        'sub_futures': sub_futures,
+                        'agg_future': agg_future,
+                        'results': [None] * len(items),
+                        'done_count': 0,
+                        'failed': False,
+                        'exception': None,
+                        'partial': iter_promise.partial,
+                    }
+                    started.add(successor)
+
+                def _handle_iter_completion(iter_node_id: str) -> None:
+                    """Finalize an iter-node after all sub-tasks complete."""
+                    state = _iter_state[iter_node_id]
+                    self.task_durations[iter_node_id] = _time.perf_counter() - self.task_start_times[iter_node_id]
+
+                    if state['failed'] and not state['partial']:
+                        state['agg_future'].set_exception(state['exception'])
+                        if verbose:
+                            print(f"Event {iter_node_id} (iter) exited with exception...")
+                        self.failed.add(iter_node_id)
+
+                        if self._callbacks and self._callbacks.on_task_error:
+                            self._callbacks.on_task_error(iter_node_id, graph.nodes[iter_node_id]['name'], state['exception'])
+
+                        skipping = [
+                            e[1] for e in set(graph.out_edges(iter_node_id))
+                            if not _edges.continue_on_failure(graph.edges[e])
+                        ]
+                    else:
+                        aggregated = state['results']
+                        state['agg_future'].set_result(aggregated)
+                        self.completed.add(iter_node_id)
+
+                        if self._callbacks and self._callbacks.on_task_complete:
+                            self._callbacks.on_task_complete(iter_node_id, graph.nodes[iter_node_id]['name'], aggregated)
+
+                        skipping = [
+                            e[1] for e in set(graph.out_edges(iter_node_id))
+                            if not _edges.continue_on_success(graph.edges[e])
+                        ]
+
+                    self.skipped = self.skipped.union(skipping)
+                    for n in skipping:
+                        self.skipped = self.skipped.union(_nx.descendants(graph, n))
+
+                    if self._callbacks and self._callbacks.on_progress:
+                        self._callbacks.on_progress(len(self.completed), len(self.failed), len(self.skipped), total_nodes)
+
+                    del _iter_state[iter_node_id]
+                    _process_successors(iter_node_id)
+
+                # Process futures as they complete (no busy-wait)
+                # Alias built-in zip to avoid shadowing by IterPromise.zip attribute
+                builtins_zip = zip
+                pending = set(refs.values())
+                future_to_event: _T.Dict[_futures.Future[_T.Any], str] = {v: k for k, v in refs.items()}
+
+                while (len(self.completed) + len(self.failed) + len(self.skipped)) != len(graph):
                     if not pending:
                         break
 
@@ -1078,74 +1459,117 @@ class DAG:
                     done, pending = _futures.wait(pending, return_when=_futures.FIRST_COMPLETED)
 
                     for future in done:
+                        # --- Sub-future of an iter-node ---
+                        if future in _sub_future_to_iter:
+                            iter_node_id, sub_idx = _sub_future_to_iter.pop(future)
+                            state = _iter_state[iter_node_id]
+
+                            if future.exception() is not None:
+                                exc = future.exception()
+                                if print_exc:
+                                    _traceback.print_exception(type(exc), exc, exc.__traceback__)
+                                if state['partial']:
+                                    state['results'][sub_idx] = None
+                                else:
+                                    state['failed'] = True
+                                    state['exception'] = exc
+                                state['done_count'] += 1
+                            else:
+                                state['results'][sub_idx] = future.result()
+                                state['done_count'] += 1
+
+                            # Check if all sub-futures for this iter-node are done
+                            if state['done_count'] == len(state['sub_futures']):
+                                _handle_iter_completion(iter_node_id)
+                            continue
+
+                        # --- Normal future ---
                         event = future_to_event[future]
+                        end_time = _time.perf_counter()
+                        self.task_durations[event] = end_time - self.task_start_times.get(event, end_time)
 
                         if future.exception() is not None:
-                            try:
-                                raise future.exception()  # type: ignore
-                            except:
-                                if print_exc:
-                                    _traceback.print_exc()
+                            exc = future.exception()
+                            if print_exc:
+                                _traceback.print_exception(type(exc), exc, exc.__traceback__)
 
-                                if retry[event][0] > 0:
-                                    if verbose:
-                                        print(f"Event {event} exited with exception, retrying...")
-                                    new_future = Submit(
-                                        event,
-                                        callable=retry[event][1]['callable'],
-                                        name=retry[event][1]['name'],
-                                        args=retry[event][1]['args'],
-                                        kwargs=retry[event][1]['kwargs']
-                                    )
-                                    refs[event] = new_future
-                                    pending.add(new_future)
-                                    future_to_event[new_future] = event
-                                    continue
-
+                            if retry[event][0] > 0:
                                 if verbose:
-                                    print(f"Event {event} exited with exception...")
-                                failed.add(event)
-                                skipping = [
-                                    e[1] for e in set(graph.out_edges(event))
-                                    if not _edges.continue_on_failure(graph.edges[e])
-                                ]
+                                    print(f"Event {event} exited with exception, retrying...")
+                                new_future = Submit(
+                                    event,
+                                    callable=retry[event][1]['callable'],
+                                    name=retry[event][1]['name'],
+                                    args=retry[event][1]['args'],
+                                    kwargs=retry[event][1]['kwargs']
+                                )
+                                refs[event] = new_future
+                                pending.add(new_future)
+                                future_to_event[new_future] = event
+                                continue
+
+                            if verbose:
+                                print(f"Event {event} exited with exception...")
+                            self.failed.add(event)
+
+                            if self._callbacks and self._callbacks.on_task_error:
+                                self._callbacks.on_task_error(event, graph.nodes[event]['name'], exc)
+
+                            skipping = [
+                                e[1] for e in set(graph.out_edges(event))
+                                if not _edges.continue_on_failure(graph.edges[e])
+                            ]
                         else:
-                            complete.add(event)
+                            self.completed.add(event)
+
+                            if self._callbacks and self._callbacks.on_task_complete:
+                                self._callbacks.on_task_complete(event, graph.nodes[event]['name'], future.result())
+
                             skipping = [
                                 e[1] for e in set(graph.out_edges(event))
                                 if not _edges.continue_on_success(graph.edges[e])
                             ]
 
-                        skipped = skipped.union(skipping)
+                        self.skipped = self.skipped.union(skipping)
                         for n in skipping:
-                            skipped = skipped.union(_nx.descendants(graph, n))
+                            self.skipped = self.skipped.union(_nx.descendants(graph, n))
 
-                        carryon = set(graph.successors(event)).difference(skipped)
-                        starting = [
-                            successor for successor in carryon
-                            if run_conditions_met(successor)
-                        ]
-
-                        for successor in starting:
-                            _args = [
-                                a if not isinstance(a, _xcoms.Promise) else refs[_T.cast(str, a.key)].result()
-                                for a in graph.nodes[successor]['args']
-                            ]
-                            _kwargs = {
-                                k: v if not isinstance(v, _xcoms.Promise) else refs[_T.cast(str, v.key)].result()
-                                for k, v in graph.nodes[successor]['kwargs'].items()
-                            }
-                            new_future = Submit(
-                                successor,
-                                graph.nodes[successor]['callable'],
-                                graph.nodes[successor]['name'],
-                                _args,
-                                _kwargs
+                        if self._callbacks and self._callbacks.on_progress:
+                            self._callbacks.on_progress(
+                                len(self.completed), len(self.failed),
+                                len(self.skipped), total_nodes
                             )
-                            refs[successor] = new_future
-                            pending.add(new_future)
-                            future_to_event[new_future] = successor
-                            started.add(successor)
+
+                        _process_successors(event)
+
+            self.dag_end_time = _time.perf_counter()
+
+            if self._callbacks and self._callbacks.on_dag_complete:
+                self._callbacks.on_dag_complete(
+                    len(self.completed), len(self.failed),
+                    len(self.skipped), self.dag_end_time - self.dag_start_time
+                )
+
+        @property
+        def metrics(self) -> 'DAGMetrics':
+            """Return structured execution metrics from the completed run."""
+            return DAGMetrics(
+                total_duration=self.dag_end_time - self.dag_start_time,
+                task_durations=dict(self.task_durations),
+                task_start_times=dict(self.task_start_times),
+                completed=set(self.completed),
+                failed=set(self.failed),
+                skipped=set(self.skipped),
+                total_nodes=len(self.graph.nodes) if self.graph else 0,
+            )
+
+        def dashboard(self) -> None:
+            """
+            Open a post-execution dashboard in the browser showing the DAG
+            with metrics overlay (node status colors, timing, summary stats).
+            """
+            import webber.viz as _viz
+            _viz.visualize_dashboard(self.graph, self.metrics)
 
 class QueueDAG(DAG):
     """
@@ -1187,6 +1611,11 @@ class QueueDAG(DAG):
 
         - max_iter: Maximum number of times that Queue DAG node should be executed. Meant for use with halt_condition in order to prevent forever loop.
         """
+        # IterPromise is not supported in QueueDAG
+        if any(isinstance(a, _xcoms.IterPromise) for a in args) or \
+           any(isinstance(v, _xcoms.IterPromise) for v in kwargs.values()):
+            raise TypeError("IterPromise is not supported in QueueDAG. Use DAG for fan-out patterns.")
+
         halt_condition = kwargs.pop('halt_condition', None)
         iterator: int = kwargs.pop('iterator', None)
         max_iter: int = kwargs.pop('max_iter', None)
@@ -1215,7 +1644,8 @@ class QueueDAG(DAG):
         for node in (u_of_edge, v_of_edge):
             try:
                 node_id = self.node_id(node)
-            except:
+            except (ValueError, TypeError):
+                # Node doesn't exist in DAG yet, no edges to validate
                 continue
         
             filter = (lambda e: e.parent == node_id) if node == u_of_edge else (lambda e: e.child == node_id)

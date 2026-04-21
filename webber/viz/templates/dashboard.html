@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Webber DAG Dashboard</title>
+    <script
+        type="text/javascript"
+        src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"
+    ></script>
+    <style type="text/css">
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-main: #1a1a2e;
+            --bg-card: #16213e;
+            --bg-network: #0f0f1a;
+            --bg-input: #0f0f1a;
+            --accent: #e94560;
+            --text-primary: #eaeaea;
+            --text-muted: #a0a0a0;
+            --border: #2a2a4a;
+            --success: #4caf50;
+            --failure: #f44336;
+            --skipped: #9e9e9e;
+        }
+        html, body {
+            width: 100%; height: 100%; overflow: hidden;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-main); color: var(--text-primary);
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            grid-template-rows: 56px 1fr;
+            height: 100vh; gap: 1px;
+            background: var(--border);
+        }
+        .header {
+            grid-column: 1 / -1;
+            background: var(--bg-card);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 20px;
+        }
+        .logo { display: flex; align-items: center; gap: 10px; }
+        .logo-icon {
+            width: 32px; height: 32px;
+            background: linear-gradient(135deg, var(--accent) 0%, #ff6b6b 100%);
+            border-radius: 6px; display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 16px; color: white;
+        }
+        .logo-text { font-size: 20px; font-weight: 600; }
+        .logo-text span { color: var(--accent); }
+        .badge {
+            background: var(--success); color: white;
+            padding: 4px 10px; border-radius: 12px;
+            font-size: 11px; font-weight: 600;
+        }
+        .badge.has-failures { background: var(--failure); }
+        .sidebar {
+            background: var(--bg-card); padding: 16px; overflow-y: auto;
+        }
+        .sidebar-section { margin-bottom: 20px; }
+        .sidebar-title {
+            font-size: 10px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 1px; color: var(--text-muted); margin-bottom: 10px;
+        }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .stat-card {
+            background: var(--bg-input); border-radius: 6px;
+            padding: 10px; text-align: center;
+        }
+        .stat-value { font-size: 20px; font-weight: 700; color: var(--accent); }
+        .stat-value.success { color: var(--success); }
+        .stat-value.failure { color: var(--failure); }
+        .stat-value.skipped { color: var(--skipped); }
+        .stat-label {
+            font-size: 10px; color: var(--text-muted);
+            text-transform: uppercase; margin-top: 2px;
+        }
+        .duration-display {
+            background: var(--bg-input); border-radius: 6px;
+            padding: 14px; text-align: center; margin-bottom: 12px;
+        }
+        .duration-value { font-size: 28px; font-weight: 700; color: var(--accent); }
+        .duration-unit { font-size: 12px; color: var(--text-muted); }
+        .legend-item { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 12px; }
+        .legend-color { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+        .node-list { max-height: 200px; overflow-y: auto; }
+        .node-list-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 6px 8px; border-radius: 4px; margin-bottom: 2px;
+            font-size: 11px; background: var(--bg-input);
+        }
+        .node-list-name { font-weight: 500; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+        .node-list-time { font-family: monospace; color: var(--text-muted); }
+        .network-container { background: var(--bg-network); position: relative; }
+        #mynetwork { width: 100%; height: 100%; }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">W</div>
+                <div class="logo-text">Webber<span>Dashboard</span></div>
+            </div>
+            <div class="badge {{ 'has-failures' if failed_count > 0 else '' }}">
+                {% if failed_count > 0 %}{{ failed_count }} FAILED{% else %}ALL PASSED{% endif %}
+            </div>
+        </header>
+
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-title">Execution Summary</div>
+                <div class="duration-display">
+                    <div class="duration-value">{{ "%.3f"|format(total_duration) }}</div>
+                    <div class="duration-unit">seconds</div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value success">{{ completed_count }}</div>
+                        <div class="stat-label">Completed</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value failure">{{ failed_count }}</div>
+                        <div class="stat-label">Failed</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value skipped">{{ skipped_count }}</div>
+                        <div class="stat-label">Skipped</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">{{ total_nodes }}</div>
+                        <div class="stat-label">Total</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">Status Legend</div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #4caf50;"></div>
+                    <span>Completed</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #f44336;"></div>
+                    <span>Failed</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #9e9e9e;"></div>
+                    <span>Skipped</span>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">Task Durations</div>
+                <div class="node-list">
+                    {% for item in task_list %}
+                    <div class="node-list-item">
+                        <span class="node-list-name" title="{{ item.id }}">{{ item.name }}</span>
+                        <span class="node-list-time">{{ "%.1f"|format(item.duration_ms) }}ms</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </aside>
+
+        <main class="network-container">
+            <div id="mynetwork"></div>
+        </main>
+    </div>
+
+    {{ network_script }}
+</body>
+</html>
