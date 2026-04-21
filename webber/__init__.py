@@ -5,7 +5,7 @@ import sys as _sys
 import logging as _logging
 import threading as _threading
 
-__version__ = '0.3.0'
+__version__ = '0.4.0'
 __supported__ = ("linux", "linux2", "win32")
 
 if _sys.platform not in __supported__:
