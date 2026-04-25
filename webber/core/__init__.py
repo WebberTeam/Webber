@@ -853,15 +853,26 @@ class DAG:
                 # _visualize_gui(self.graph)
                 raise NotImplementedError
 
-            case None: 
-                if _viz._in_notebook():
-                    return _viz.visualize_plt(self.graph)
-                else:
-                    _viz.visualize_browser(self.graph)
+            case None:
+                try:
+                    return _viz.render_ascii(self.graph)
+                except ImportError:
+                    if _viz._in_notebook():
+                        return _viz.visualize_plt(self.graph)
+                    else:
+                        _viz.visualize_browser(self.graph)
+
+            case 'ascii':
+                return _viz.render_ascii(self.graph)
 
             case _:
                 err_msg = "Unknown visualization type requested."
                 raise NotImplementedError(err_msg)
+
+    def render(self) -> str:
+        """Render DAG structure as ASCII box art. Requires phart >= 1.3.0."""
+        import webber.viz as _viz
+        return _viz.render_ascii(self.graph)
 
     @property
     def root(self) -> _T.List[str]:
@@ -1570,6 +1581,15 @@ class DAG:
             """
             import webber.viz as _viz
             _viz.visualize_dashboard(self.graph, self.metrics)
+
+        def render(self) -> str:
+            """
+            Render post-execution DAG as ASCII box art with status coloring.
+            Green=completed, red=failed, grey=skipped, with per-task timing.
+            Requires phart >= 1.3.0.
+            """
+            import webber.viz as _viz
+            return _viz.render_ascii(self.graph, self.metrics)
 
 class QueueDAG(DAG):
     """

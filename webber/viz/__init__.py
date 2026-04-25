@@ -391,6 +391,99 @@ def visualize_dashboard(graph: _nx.DiGraph, metrics: _typing.Any) -> None:
     print('\nDashboard closed.')
 
 
+def render_ascii(
+    graph: _nx.DiGraph,
+    metrics: _typing.Optional[_typing.Any] = None,
+) -> str:
+    """
+    Render a DAG as ASCII/Unicode box art in the terminal.
+    If metrics (DAGMetrics) is provided, nodes are colored by execution status:
+    green=completed, red=failed, grey=skipped, with per-task timing labels.
+
+    Requires phart >= 1.3.0 with BBOX support.
+    Install: pip install "phart @ git+https://github.com/scottvr/phart.git@release-1.3.0"
+
+    Args:
+        graph: The DAG's NetworkX DiGraph (dag.graph).
+        metrics: Optional DAGMetrics from executor.metrics.
+
+    Returns:
+        Rendered string (with ANSI codes if metrics provided).
+
+    Raises:
+        ImportError: If phart is not installed or lacks BBOX support.
+    """
+    try:
+        from phart import ASCIIRenderer, LayoutOptions, NodeStyle
+        if not hasattr(NodeStyle, 'BBOX'):
+            raise ImportError("phart >= 1.3.0 with BBOX support required")
+    except ImportError:
+        raise ImportError(
+            "ASCII DAG rendering requires phart >= 1.3.0.\n"
+            "Install: pip install \"phart @ git+https://github.com/scottvr/phart.git@release-1.3.0\""
+        )
+
+    # Build display graph with human-readable names
+    display = _nx.DiGraph()
+    name_map: _typing.Dict[str, str] = {}
+    for n in graph.nodes:
+        name = graph.nodes[n].get('name', str(n).split('__')[0])
+        if metrics:
+            dur = metrics.task_durations.get(n)
+            if dur is not None:
+                label = f'{name} ({dur*1000:.0f}ms)'
+            elif n in metrics.skipped:
+                label = f'{name} [skip]'
+            else:
+                label = name
+        else:
+            label = name
+        name_map[n] = label
+        display.add_node(label)
+    for u, v in graph.edges:
+        display.add_edge(name_map[u], name_map[v])
+
+    use_color = metrics is not None
+
+    opts = LayoutOptions(
+        bboxes=True, hpad=2, node_style=NodeStyle.MINIMAL,
+        layer_spacing=3, edge_anchor_mode='ports', use_ascii=False,
+        ansi_colors=use_color, color_nodes=True,
+    )
+
+    if not use_color:
+        return ASCIIRenderer(display, options=opts).render()
+
+    # Subclass to inject status colors
+    _GREEN = '\033[38;5;34m'
+    _RED = '\033[38;5;196m'
+    _GREY = '\033[38;5;245m'
+    _YELLOW = '\033[38;5;220m'
+
+    class _StatusRenderer(ASCIIRenderer):
+        def __init__(self, g, status_colors, **kw):
+            self._status_colors = status_colors
+            super().__init__(g, **kw)
+        def _initialize_color_maps(self, positions):
+            super()._initialize_color_maps(positions)
+            self._node_color_map = dict(self._status_colors)
+            for edge in self.graph.edges:
+                self._edge_color_map[edge] = self._status_colors.get(edge[0], '')
+
+    colors = {}
+    for node_id, label in name_map.items():
+        if node_id in metrics.completed:
+            colors[label] = _GREEN
+        elif node_id in metrics.failed:
+            colors[label] = _RED
+        elif node_id in metrics.skipped:
+            colors[label] = _GREY
+        else:
+            colors[label] = _YELLOW
+
+    return _StatusRenderer(display, status_colors=colors, options=opts).render()
+
+
 def _in_notebook() -> bool:
     """
     Internal only. Helper to default to interactive notebooks when available
