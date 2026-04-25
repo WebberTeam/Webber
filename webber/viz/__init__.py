@@ -283,6 +283,114 @@ def visualize_browser(graph: _nx.DiGraph):
 
     print('\nVisualization closed.')
 
+def visualize_dashboard(graph: _nx.DiGraph, metrics: _typing.Any) -> None:
+    """
+    Serves a post-execution dashboard showing the DAG with metrics overlay.
+    Nodes are colored by execution status (green=completed, red=failed, grey=skipped).
+    Sidebar shows timing data and summary statistics.
+
+    Args:
+        graph: The executed DAG's NetworkX DiGraph.
+        metrics: A DAGMetrics instance from DAGExecutor.metrics.
+    """
+    if _sys.platform not in ['darwin', 'win32', 'linux', 'linux2']:
+        err_msg = "Unknown/unsupported operating system for GUI visualizations."
+        raise RuntimeError(err_msg)
+
+    if len(graph.nodes()) == 0:
+        raise RuntimeError("Cannot generate dashboard for empty DAG.")
+
+    # Build Vis.js network with status-based coloring
+    network = _Network(directed=True, layout='hierarchical')
+    network.inherit_edge_colors(False)
+
+    generations = [sorted(generation) for generation in _nx.topological_generations(graph)]
+    node_generation = lambda n: [i for i, G in enumerate(generations) if n in G][0]
+
+    status_colors = {
+        'completed': '#4caf50',
+        'failed': '#f44336',
+        'skipped': '#9e9e9e',
+    }
+
+    for n in graph.nodes:
+        node = graph.nodes[n]
+        # Determine status color
+        if n in metrics.completed:
+            color = status_colors['completed']
+        elif n in metrics.failed:
+            color = status_colors['failed']
+        elif n in metrics.skipped:
+            color = status_colors['skipped']
+        else:
+            color = node_color(node['callable'])
+
+        # Build tooltip with timing
+        title = annotate_node(node)
+        duration = metrics.task_durations.get(n)
+        if duration is not None:
+            title += f"\nduration: {duration*1000:.1f}ms"
+
+        network.add_node(
+            n, label=node['name'], shape='box',
+            title=title, labelHighlightBold=True,
+            color=color, level=node_generation(n)
+        )
+
+    for source_edge, dest_edge in graph.edges:
+        condition: Condition = graph.edges.get((source_edge, dest_edge))['Condition']
+        network.add_edge(source_edge, dest_edge, color=edge_color(condition))
+
+    # Generate Vis.js script
+    network_data = dict(
+        zip(["nodes", "edges", "heading", "height", "width", "options"],
+        network.get_network_data())
+    )
+
+    script_js = "var nodes = new vis.DataSet(" + _json.dumps(network_data['nodes']) + ");\n"
+    script_js += "var edges = new vis.DataSet(" + _json.dumps(network_data['edges']) + ");\n"
+    script_js += 'var container = document.getElementById("mynetwork");\n'
+    script_js += "var data = { nodes: nodes, edges: edges };\n"
+    script_js += """var options = {
+        "autoResize": true,
+        "edges": { "color": { "inherit": false }, "smooth": { "enabled": false }, "arrows": { "to": true } },
+        "layout": { "hierarchical": { "direction": "UD", "enabled": true, "sortMethod": "hubsize" } },
+        "physics": { "enabled": true, "stabilization": { "enabled": true, "iterations": 500 } }
+    };\n"""
+    script_js += "var network = new vis.Network(container, data, options);\n"
+
+    script = '<script type="text/javascript">\n' + script_js + '</script>\n'
+
+    # Build task list sorted by duration
+    task_list = []
+    for node_id, duration in sorted(metrics.task_durations.items(), key=lambda x: x[1], reverse=True):
+        name = graph.nodes[node_id].get('name', node_id.split('__')[0])
+        task_list.append({'id': node_id, 'name': name, 'duration_ms': duration * 1000})
+
+    # Render template
+    root = _path.dirname(_path.abspath(__file__))
+    templates_dir = _path.join(root, 'templates')
+    env = _Environment(loader=_FileSystemLoader(templates_dir))
+    template = env.get_template("dashboard.html")
+
+    html = template.render(
+        network_script=script,
+        total_duration=metrics.total_duration,
+        completed_count=metrics.completed_count,
+        failed_count=metrics.failed_count,
+        skipped_count=metrics.skipped_count,
+        total_nodes=metrics.total_nodes,
+        task_list=task_list,
+    )
+
+    # Serve via Flask
+    server = _flask.Flask(__name__)
+    server.add_url_rule("/", "index", lambda: html)
+    print('Serving execution dashboard...\n')
+    server.run(host="127.0.0.1", port=5000)
+    print('\nDashboard closed.')
+
+
 def _in_notebook() -> bool:
     """
     Internal only. Helper to default to interactive notebooks when available

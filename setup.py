@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 setup(
     name='webber',
-    version='0.3.0',
+    version='0.4.0',
     description='A Pythonic platform for no-latency ETL and embarrassingly parallel directed acyclic graphs.',
     long_description='A Pythonic platform for no-latency ETL and embarrassingly parallel directed acyclic graphs.',
     long_description_content_type='text/x-rst',

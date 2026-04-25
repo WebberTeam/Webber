@@ -115,8 +115,64 @@ node = qdag.add_node(data_fetcher, iterator=50)
 results = qdag.execute()  # Returns list of all outputs
 ```
 
+- **Progress Callbacks:** Observe DAG execution in real time without modifying callables:
+```python
+from webber import DAGCallbacks
+
+callbacks = DAGCallbacks(
+    on_progress=lambda completed, failed, skipped, total: print(f"{completed}/{total}"),
+    on_task_error=lambda node_id, name, exc: logging.error(f"{name}: {exc}")
+)
+dag.execute(callbacks=callbacks)
+```
+
+- **Execution Metrics:** Structured telemetry from completed runs — per-task timing, completion tracking, and summary statistics:
+```python
+executor = dag.execute(return_ref=True)
+m = executor.metrics
+
+m.total_duration        # wall-clock seconds
+m.task_durations        # per-node timing
+m.completed_count       # nodes that succeeded
+```
+
+- **IterPromise (Dynamic Fan-Out):** Spawn N parallel child tasks at runtime based on a parent's list output. The DAG graph is never mutated — fan-out is an executor-internal detail:
+```python
+from webber import IterPromise
+
+dag = webber.DAG()
+source = dag.add_node(lambda: ["a", "b", "c"])
+worker = dag.add_node(str.upper, IterPromise(source))      # runs 3x in parallel
+collector = dag.add_node(print, Promise(worker))            # receives ["A", "B", "C"]
+dag.add_edge(source, worker)
+dag.add_edge(worker, collector)
+dag.execute()
+```
+Supports multi-source zip (`IterPromise(src_a, src_b, zip=True)`) and resilient mode (`partial=True`).
+
+- **Topology Export/Import:** Save DAG structure as JSON templates. Reconstruct with a callable registry:
+```python
+dag.to_json("pipeline.json")
+dag2 = webber.DAG.from_json("pipeline.json", registry={"extract": extract_fn, "transform": transform_fn})
+```
+
+- **Execution Dashboard:** Post-execution browser visualization with metrics overlay, node status coloring, and timing sidebar:
+```python
+executor = dag.execute(return_ref=True)
+executor.dashboard()  # opens Flask server at localhost:5000
+```
+
 ## Project Roadmap:
 #### See our latest releases for an overview of what this module supports. Our next release(s) are expected to cover the following:
+
+#### *Added in Version 0.4:*
+- **IterPromise**: Dynamic fan-out — spawn N parallel tasks from a parent's list output at runtime. Supports zip mode and partial (resilient) error handling.
+- **Progress Callbacks**: `DAGCallbacks` dataclass with 6 hook points (`on_dag_start`, `on_task_start`, `on_task_complete`, `on_task_error`, `on_progress`, `on_dag_complete`). Zero overhead when unset.
+- **Execution Metrics**: `DAGMetrics` dataclass with per-task timing, completion tracking, and summary statistics via `executor.metrics`.
+- **Topology Export/Import**: Save/restore DAG structure as JSON with callable registry (`to_json`, `from_json`, `to_dict`, `from_dict`).
+- **Execution Dashboard**: Post-execution browser visualization with Vis.js, node status coloring, timing sidebar, and summary stats.
+- **Bug Fixes**: Bare except clauses, comparison anti-patterns, dead code cleanup, edgedict no-op removal.
+- **471 tests**, all passing with no latency regression.
 
 #### *Added in Version 0.3:*
 - **Comprehensive Test Suite**: 370 tests with 90% code coverage across all modules
@@ -139,6 +195,7 @@ results = qdag.execute()  # Returns list of all outputs
 - Edge and Node filtering with Lambda Functions (e.g.: `lambda e: e.Condition == condition.OnSuccess`).
 
 #### *Future Roadmap*:
-You decide! We're taking recommendations for future work.
-- Successor and predecessor functions
-- Additional QueueDAG patterns and optimizations
+We're taking recommendations for future work.
+- Live real-time monitoring dashboard (WebSocket/SSE)
+- Execution checkpointing and resume
+- Agent-specific abstractions (perception/action node types)
